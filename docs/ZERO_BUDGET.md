@@ -31,11 +31,7 @@ Server tumhare PC par chalega. Cloudflare Quick Tunnel usko temporary HTTPS addr
 
 Windows par official cloudflared tool install karo. Official download instructions: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/
 
-Official Windows command (agar winget installed hai):
-
-```powershell
-winget install --id Cloudflare.cloudflared
-```
+Official downloads page se apne Windows processor ke liye executable download karo. Use `cloudflared.exe` naam dekar project ke `tools` folder mein rakho. Launcher usko automatically dhund lega; downloaded executable Git mein upload nahi hoga. Agar pehle se PATH par installed hai toh file copy karna zaroori nahi.
 
 Terminal dobara kholo, project folder mein:
 

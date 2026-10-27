@@ -1,7 +1,9 @@
 const { spawn, spawnSync } = require('node:child_process');
 const { createServer } = require('../server/index.cjs');
 const share = process.argv.includes('--share');
-const cloudflared = process.env.CLOUDFLARED_PATH || 'cloudflared';
+const path = require('node:path'), fs = require('node:fs');
+const localTool = path.join(__dirname, '../tools', process.platform === 'win32' ? 'cloudflared.exe' : 'cloudflared');
+const cloudflared = process.env.CLOUDFLARED_PATH || (fs.existsSync(localTool) ? localTool : 'cloudflared');
 const port = Number(process.env.PORT || 8787);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   console.error('PORT must be a number from 1 to 65535.'); process.exit(1);
