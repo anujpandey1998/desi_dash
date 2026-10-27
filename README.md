@@ -71,3 +71,7 @@ The previous 0.2.1 APK passed Android 15 emulator launch, rendered menu/gameplay
 See [launch status](docs/LAUNCH_STATUS.md) for the inherited-work audit and launch prerequisites. The tutorial performs real movement on a stationary practice course. Identical network retries of a verified result are idempotent.
 
 To containerize the test server: `docker build -f server/Dockerfile -t rooftop-challenges .`, then `docker run -p 8787:8787 -v rooftop-data:/data rooftop-challenges`. Put the service behind HTTPS before connecting release APKs.
+
+## Zero-budget workflow
+
+Paid cloud builds/hosting are optional. Use local APK builds and the existing offline game. `npm run friends:local` starts a loopback-only challenge server; `npm run friends:share` explicitly starts a temporary Cloudflare HTTPS tunnel after cloudflared is installed. No account or domain is required for Quick Tunnel tests; the PC and terminal must remain running. See [beginner zero-budget guide](docs/ZERO_BUDGET.md) for exact steps, limits and best practices. The shared tunnel is not started automatically by the app or by local tests.

@@ -17,7 +17,9 @@
     "preview:3d": "node scripts/preview-3d.cjs",
     "test:render": "node scripts/check-3d-render.cjs",
     "server": "node server/index.cjs",
-    "test:social": "node --test scripts/social.test.cjs"
+    "test:social": "node --test scripts/social.test.cjs",
+    "friends:local": "node scripts/friends-local.cjs",
+    "friends:share": "node scripts/friends-local.cjs --share"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
