@@ -43,3 +43,9 @@ test('interstitial policy requires four more solo runs and a three-minute cooldo
  assert.equal(exports.isInterstitialDue(7,4,0,1000000),false);
  assert.equal(exports.isInterstitialDue(8,4,0,1000000),true);
 });
+
+test('room seed and league survive a server restart',async()=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'rooftop-room-')),file=path.join(dir,'rooms.json');let server=createServer({file});
+ const listen=async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));return 'http://127.0.0.1:'+server.address().port;};
+ try{let base=await listen();const room=await(await fetch(base+'/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({version:1})})).json();await new Promise(r=>server.close(r));server=createServer({file});base=await listen();const data=await(await fetch(base+'/rooms/'+room.code)).json();assert.equal(data.challenge.code,room.code);assert.equal(data.challenge.seed,room.seed);assert.deepEqual(data.league.entries,[]);}finally{if(server.listening)await new Promise(r=>server.close(r));if(fs.existsSync(file))fs.unlinkSync(file);if(fs.existsSync(file+'.tmp'))fs.unlinkSync(file+'.tmp');fs.rmdirSync(dir);}
+});

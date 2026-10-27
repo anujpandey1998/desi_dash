@@ -31,3 +31,15 @@ The active deliverable is the 3D Rooftop Rush async-friends game. Stable 0.2.1 r
 ## Planned extensions
 
 Additional route themes, roof-gap physics, drone/revive systems, Firebase accounts/cloud sync, lucky spin and live multiplayer are separate features. The present test app supports asynchronous room races, replay ghosts and room leagues.
+
+## Verified test build - 2026-10-27
+
+- TypeScript passed; 11 physics/tutorial tests and 10 social/storage/ad-policy tests passed.
+- Browser WebGL checks passed for shaders, movement, jump and ghost pose (128 draw calls, 21,510 triangles in the fixture).
+- Android 15 emulator fresh-data test passed: cold launch, rooftop menu, all three tutorial actions, pause, resume, scored gameplay, game-over results, saved best score, game-to-menu cleanup, and friends/missions screen. The recorded run reached 54 m / 541 points and mission progress reflected it. Native crash buffer remained empty.
+- WorkManager's generated Room database constructor was stripped by R8 in the first native test. A targeted WorkDatabase_Impl constructor keep rule fixes startup and is checked by APK verification alongside Expo GL's reflective/JNI entry points.
+- Final APK signature, API 33 minimum/API 36 target, bundled JavaScript and ARM64 ELF/ZIP 16 KB alignment passed.
+- The test AVD uses ARM translation with APK ARM64 libraries extracted only into its installed test directory. The distributed APK is unchanged. Physical Redmi Note 14 Pro+ testing remains with the owner.
+- Live ads/consent serving was not verified against a publisher account; test IDs and graceful failure behavior are included. The friend server passed HTTP/replay/retry/persistence tests locally; no public server is deployed.
+
+Local deliverable: `artifacts/RooftopRush-0.3.0-test.apk` (52,116,988 bytes), SHA-256 `2C6EB8AD6CB43E236637F40360DC7628ECFA0BEFED1C1CC8713E781B09A6251F`. This APK uses the standard internal debug signing key, so it is intended for direct phone testing.
