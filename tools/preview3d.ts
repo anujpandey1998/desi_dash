@@ -1,0 +1,13 @@
+﻿import * as THREE from 'three';
+import { createRunnerWorld } from '../src/game3d/world';
+import { createRunner, advanceRunner, steer, jump, slide, resetRunner } from '../src/game3d/simulation';
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.toneMapping=THREE.ACESFilmicToneMapping;document.body.appendChild(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,0.1,200);
+const world=createRunnerWorld();scene.add(world.root);world.configure(scene,camera);
+const runner=createRunner(42);runner.status='paused';
+const label=document.createElement('div');label.style.cssText='position:absolute;top:18px;left:18px;color:#17323c;font:700 12px system-ui;background:#fff3dcdd;padding:12px;border-radius:12px';document.body.appendChild(label);
+let running=false,last=performance.now();
+function frame(now:number){const dt=Math.min((now-last)/1000,.1);last=now;if(running)advanceRunner(runner,dt);world.update(runner,dt,camera);renderer.render(scene,camera);label.textContent=`3D RENDER CHECK • ${Math.floor(runner.distance)} m • ${runner.coins} coins • ${runner.status}`;requestAnimationFrame(frame);}requestAnimationFrame(frame);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+addEventListener('keydown',e=>{if(runner.status!=='running'&&(e.key===' '||e.key==='Enter')){resetRunner(runner,42);runner.status='running';running=true;}if(e.key==='ArrowLeft')steer(runner,-1);if(e.key==='ArrowRight')steer(runner,1);if(e.key==='ArrowUp'||e.key===' ')jump(runner);if(e.key==='ArrowDown')slide(runner);});
+(globalThis as any).runnerTest={runner,start(){runner.status='running';running=true;},reset(){resetRunner(runner,42);runner.status='running';running=true;},steer:(d:-1|1)=>steer(runner,d),jump:()=>jump(runner),slide:()=>slide(runner),advance(t:number){advanceRunner(runner,t);world.update(runner,t,camera);},setDistance(d:number){runner.distance=d;runner.elapsed=d/13;world.update(runner,.1,camera);renderer.render(scene,camera);},stats:()=>({drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries}),world,renderer,camera};

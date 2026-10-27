@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Neon Dash",
+    "slug": "neon-dash",
+    "version": "0.2.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow Neon Dash to take a photo for your runner's face.",
+          "photosPermission": "Allow Neon Dash to choose a photo for your runner's face.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 33,
+            "targetSdkVersion": 36,
+            "extraProguardRules": "# Expo GLView is constructed reflectively by Expo ViewDefinitionBuilder.\n-keep class expo.modules.gl.GLView { *; }\n# libexpo-gl calls GLContext.flush() by name through JNI.\n-keep class expo.modules.gl.GLContext { *; }"
+          }
+        }
+      ],
+      "./plugins/withShortCmakePaths.cjs",
+      "expo-asset",
+      "./plugins/withGameGraphics.cjs"
+    ],
+    "android": {
+      "package": "com.anujpandey.neondash",
+      "versionCode": 3,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
+    }
+  }
+}

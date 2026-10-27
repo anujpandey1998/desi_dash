@@ -1,0 +1,56 @@
+{
+  "name": "neon-dash",
+  "version": "0.2.1",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "node scripts/build-android.cjs run",
+    "typecheck": "tsc --noEmit",
+    "doctor": "expo-doctor",
+    "android:apk": "node scripts/build-android.cjs apk",
+    "android:aab": "node scripts/build-android.cjs aab",
+    "android:go": "expo start --android --localhost",
+    "test": "node --test scripts/game-engine.test.cjs",
+    "android:verify": "node scripts/verify-apk.cjs",
+    "android:sync": "expo prebuild --platform android --no-install",
+    "preview:3d": "node scripts/preview-3d.cjs",
+    "test:render": "node scripts/check-3d-render.cjs"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-navigation/native": "^7.5.1",
+    "@react-navigation/stack": "^7.12.1",
+    "@react-three/fiber": "^9.8.2",
+    "expo": "^58.0.19",
+    "expo-asset": "~58.0.18",
+    "expo-audio": "^58.0.10",
+    "expo-build-properties": "~58.0.11",
+    "expo-file-system": "^58.0.11",
+    "expo-gl": "~58.0.3",
+    "expo-haptics": "^58.0.7",
+    "expo-image-picker": "^58.0.10",
+    "expo-status-bar": "^58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.0",
+    "react-native-gesture-handler": "~3.3.0",
+    "react-native-safe-area-context": "^5.10.1",
+    "react-native-screens": "^4.30.0",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "@types/three": "^0.180.0",
+    "esbuild": "^0.28.2",
+    "expo-doctor": "^1.17.15",
+    "playwright-core": "^1.64.1",
+    "typescript": "~6.0.3"
+  },
+  "expo": {
+    "doctor": {
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
+      }
+    }
+  }
+}
