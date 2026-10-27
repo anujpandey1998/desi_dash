@@ -10,7 +10,8 @@ import { loadVibrationSetting, loadSoundSetting, pauseMusic, playButtonTap, play
 
 import { type InputAction, type RunInput, type Ticket } from '../game3d/challenges';
 import { localTransaction, saveCompletedRun, startChallenge, submitChallenge, trackEvent } from '../services/socialService';
-import { showCoinReward, TEST_ADS } from '../services/adService';
+import { showCoinReward, showInterstitialIfDue, TEST_ADS } from '../services/adService';
+import { loadTutorialComplete, saveTutorialComplete } from '../services/tutorialService';
 
 export function GameScreen({ navigation, route }: { navigation: any; route: any }) {
   const insets = useSafeAreaInsets();
@@ -19,7 +20,14 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
   const submitted = useRef(false), uploading = useRef(false), adLock = useRef(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [adBusy, setAdBusy] = useState(false), [doubled, setDoubled] = useState(false);
-  const runner = useMemo(() => createRunner(ticket.current?.challenge.seed, ticket.current?.challenge.limit || 0), []);
+  const [tutorialReady, setTutorialReady] = useState(Boolean(ticket.current));
+  const [tutorialStep, setTutorialStep] = useState<number | null>(null);
+  const [tutorialSaving, setTutorialSaving] = useState(false);
+  const runner = useMemo(() => {
+    const created = createRunner(ticket.current?.challenge.seed, ticket.current?.challenge.limit || 0);
+    if (!ticket.current) pause(created);
+    return created;
+  }, []);
   const [hud, setHud] = useState(() => snapshot(runner));
   const [ready, setReady] = useState(false);
   const [renderError, setRenderError] = useState(false);
@@ -31,6 +39,7 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
   const [saving, setSaving] = useState(false);
   const leaving = useRef(false);
   const banked = useRef(false), saveTask = useRef<Promise<void> | null>(null);
+  const tutorialTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCoinSound = useRef(0);
   const showNotice = useCallback((text: string) => {
@@ -50,19 +59,50 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
     return saveTask.current;
   }, [runner, showNotice]);
   useEffect(() => {
+    if (ticket.current) return;
+    let active = true;
+    loadTutorialComplete().then(complete => {
+      if (!active) return;
+      setTutorialStep(complete ? null : 0);
+      setTutorialReady(true);
+      if (!complete) { runner.training = true; runner.status = 'running'; runner.countdown = 0; for (const entity of runner.entities) entity.active = false; }
+      else resume(runner);
+      setHud(snapshot(runner));
+    }).catch(error => {
+      if (!active) return;
+      setTutorialReady(true);
+      setTutorialStep(null);
+      resetRunner(runner);
+      resume(runner);
+      setHud(snapshot(runner));
+      showNotice(error instanceof Error ? error.message : 'Tutorial could not be loaded.');
+    });
+    return () => { active = false; };
+  }, [runner, showNotice]);
+  useEffect(() => {
     loadHighScore().then(setBest).catch(() => {});
     loadWalletCoins().then(setWallet).catch(() => {});
     loadRunnerPhoto().then(setPhoto).catch(() => {});
     loadOutfit().then(setOutfit).catch(() => {});
     void loadVibrationSetting().catch(() => {});
     loadSoundSetting().then(() => { if (AppState.currentState === 'active') void resumeAudioIfNeeded().catch(() => {}); }).catch(() => {});
-    return () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); void pauseMusic().catch(() => {}); };
+    return () => { if (tutorialTimer.current) clearTimeout(tutorialTimer.current); if (noticeTimer.current) clearTimeout(noticeTimer.current); void pauseMusic().catch(() => {}); };
   }, []);
+  const maybeShowInterstitial = useCallback(async () => {
+    if (ticket.current || runner.status !== 'gameover') return;
+    adLock.current = true;
+    setAdBusy(true);
+    try { await showInterstitialIfDue(); }
+    catch { showNotice('The ad could not be loaded. You can continue playing.'); }
+    finally { adLock.current = false; setAdBusy(false); }
+  }, [runner, showNotice]);
   const goHome = useCallback(async () => {
     if (leaving.current || adLock.current) return;
+    const finishedSoloRun = runner.status === 'gameover' && !ticket.current;
     leaving.current = true; pause(runner); await bank();
+    if (finishedSoloRun) await maybeShowInterstitial();
     if (banked.current) navigation.goBack(); else leaving.current = false;
-  }, [runner, bank, navigation]);
+  }, [runner, bank, navigation, maybeShowInterstitial]);
   const togglePause = useCallback(() => {
     if (runner.status === 'paused') { resume(runner); void resumeAudioIfNeeded().catch(() => {}); }
     else { pause(runner); void pauseMusic().catch(() => {}); }
@@ -70,9 +110,11 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
   }, [runner]);
   useEffect(() => {
     const app = AppState.addEventListener('change', state => {
+      if (state === 'active' && runner.training) { resume(runner); setHud(snapshot(runner)); }
       if (state !== 'active') { pause(runner); setHud(snapshot(runner)); void pauseMusic().catch(() => {}); }
     });
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (runner.training) { void goHome(); return true; }
       if (runner.status === 'running' || runner.status === 'ready') togglePause(); else void goHome();
       return true;
     });
@@ -109,7 +151,7 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
     if (event === 'shield') showNotice('SHIELD READY');
     if (event === 'milestone') showNotice(`${runner.milestone - 500} m CHECKPOINT`);
     if (event === 'impact') { void triggerImpact().catch(() => {}); if (runner.status !== 'gameover') showNotice('SHIELD SAVED YOU'); }
-    if (event === 'gameover') { void playCrash().catch(() => {}); void pauseMusic().catch(() => {}); setHud(snapshot(runner)); void bank(); void upload(); void trackEvent('runs_finished').catch(() => {}); }
+    if (event === 'gameover') { void playCrash().catch(() => {}); void pauseMusic().catch(() => {}); setHud(snapshot(runner)); void bank(); void upload(); if (!ticket.current) void trackEvent('runs_finished').catch(() => {}); }
   }, [runner, bank, showNotice, upload]);
   const handled = useRef(false);
   const applySwipe = useCallback((dx: number, dy: number) => {
@@ -126,10 +168,46 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
   const retry = async () => {
     if (adLock.current || uploading.current) return;
     await bank(); if (!banked.current) return;
+    await maybeShowInterstitial();
+    if (adLock.current) return;
     if (ticket.current) { try { ticket.current = await startChallenge(ticket.current.challenge.code); } catch { showNotice('Cannot start challenge. Check your connection.'); return; } }
     inputs.current = []; submitted.current = false; setUploadStatus(''); setDoubled(false);
     banked.current = false; resetRunner(runner, ticket.current?.challenge.seed); setHud(snapshot(runner)); setNotice('');
     void playButtonTap().catch(() => {}); void resumeAudioIfNeeded().catch(() => {});
+  };
+  const tutorialActions: InputAction[] = ['left', 'jump', 'slide'];
+  const tutorialCopy = [
+    { title: 'Switch lanes', detail: 'Swipe left or right, or use the lane buttons to dodge rooftop obstacles.', label: 'TRY LEFT LANE' },
+    { title: 'Jump barriers', detail: 'Swipe up or tap JUMP to clear low barriers.', label: 'TRY JUMP' },
+    { title: 'Slide under lines', detail: 'Swipe down or tap SLIDE to duck beneath clotheslines.', label: 'TRY SLIDE' },
+  ];
+  const practiceTutorial = async (action: InputAction) => {
+    if (tutorialStep === null || tutorialSaving) return;
+    if (action !== tutorialActions[tutorialStep]) {
+      showNotice('Try the highlighted control to continue.');
+      return;
+    }
+    input(action);
+    setTutorialSaving(true);
+    tutorialTimer.current = setTimeout(() => {
+    if (tutorialStep < tutorialActions.length - 1) {
+      setTutorialStep(tutorialStep + 1);
+      setTutorialSaving(false);
+      return;
+    }
+    setTutorialSaving(true);
+    void finishTutorial();
+    }, 850);
+  };
+  const finishTutorial = async () => {
+    try { await saveTutorialComplete(); }
+    catch { showNotice('Tutorial progress could not be saved.'); }
+    finally {
+      setTutorialSaving(false);
+      setTutorialStep(null);
+      resume(runner);
+      setHud(snapshot(runner));
+    }
   };
   const onReady = useCallback(() => setReady(true), []);
   const onError = useCallback(() => setRenderError(true), []);
@@ -142,19 +220,21 @@ export function GameScreen({ navigation, route }: { navigation: any; route: any 
       <View style={styles.topRow}>
         <View style={styles.coinPill}>{photo && <Image source={{ uri: photo }} style={styles.avatar} />}<Text style={styles.coinSymbol}>●</Text><Text style={styles.coinValue}>{hud.coins}</Text></View>
         <View pointerEvents="none" style={styles.scoreBox}><Text style={[styles.small, { color: '#3b5b65' }]}>SCORE</Text><Text style={styles.score}>{hud.score.toLocaleString()}</Text></View>
-        <Pressable accessibilityLabel="Pause game" onPress={togglePause} style={styles.pause}><Text style={styles.pauseText}>Ⅱ</Text></Pressable>
+        <Pressable accessibilityLabel="Pause game" disabled={!tutorialReady || tutorialStep !== null} onPress={togglePause} style={styles.pause}><Text style={styles.pauseText}>Ⅱ</Text></Pressable>
       </View>
       <View pointerEvents="none" style={styles.metrics}><Text style={styles.metric}>{hud.distance} m</Text><Text style={styles.metric}>{hud.shield ? 'SHIELD ON' : `${hud.speed} km/h`}</Text></View>
       <View pointerEvents="none" style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
-      <Text pointerEvents="none" style={styles.target}>{ticket.current ? 'FRIEND RACE ? ' + Math.max(0, Math.ceil(90 - runner.elapsed)) + 's LEFT' : 'NEXT DELIVERY  ' + hud.milestone + ' m'}</Text>
+      <Text pointerEvents="none" style={styles.target}>{ticket.current ? 'FRIEND RACE - ' + Math.max(0, Math.ceil(90 - runner.elapsed)) + 's LEFT' : 'NEXT DELIVERY  ' + hud.milestone + ' m'}</Text>
     </View>
     {!!notice && <View pointerEvents="none" style={[styles.notice, { top: insets.top + 155 }]}><Text style={styles.noticeText}>{notice}</Text></View>}
     {hud.status === 'running' && <View style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 12 }]}>
       {(['left', 'jump', 'slide', 'right'] as const).map((action, i) => <Pressable key={action} accessibilityLabel={action} onPress={() => input(action)} style={({ pressed }) => [styles.control, pressed && styles.controlPressed]}><Text style={styles.controlIcon}>{['‹', '↑', '↓', '›'][i]}</Text><Text style={styles.controlLabel}>{action.toUpperCase()}</Text></Pressable>)}
     </View>}
     {!ready && !renderError && <View style={styles.veil}><ActivityIndicator color="#f1bd5b" size="large" /><Text style={styles.loading}>Preparing the city...</Text></View>}
+    {ready && !tutorialReady && <View style={styles.veil}><ActivityIndicator color="#f1bd5b" size="large" /><Text style={styles.loading}>Getting your controls ready...</Text></View>}
+    {ready && tutorialStep !== null && <View style={[styles.veil, { backgroundColor: 'transparent', justifyContent: 'flex-end', paddingBottom: Math.max(insets.bottom, 12) + 12 }]}><View style={[styles.card, { padding: 20 }]}><Text style={styles.eyebrow}>FIRST DELIVERY · {tutorialStep + 1}/3</Text><Text style={styles.title}>{tutorialCopy[tutorialStep].title}</Text><Text style={styles.description}>{tutorialCopy[tutorialStep].detail}</Text><Pressable disabled={tutorialSaving} style={styles.primary} onPress={() => void practiceTutorial(tutorialActions[tutorialStep])}><Text style={styles.primaryText}>{tutorialSaving ? 'SAVING...' : tutorialCopy[tutorialStep].label}</Text></Pressable><Text style={styles.instructions}>You can use swipes or the on-screen controls once the run begins.</Text></View></View>}
     {ready && hud.status === 'ready' && <View pointerEvents="none" style={styles.countdown}><Text style={styles.eyebrow}>YOUR RUN STARTS IN</Text><Text style={styles.count}>{hud.countdown || 'GO'}</Text><Text style={styles.instructions}>Swipe to change lanes · Up to jump · Down to slide</Text></View>}
-    {hud.status === 'paused' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>TAKE A BREATHER</Text><Text style={styles.title}>Run paused.</Text><Text style={styles.description}>The city will wait for you.</Text><Pressable style={styles.primary} onPress={togglePause}><Text style={styles.primaryText}>CONTINUE RUN</Text></Pressable><Pressable style={styles.secondary} disabled={saving || adBusy} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
+    {hud.status === 'paused' && tutorialStep === null && tutorialReady && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>TAKE A BREATHER</Text><Text style={styles.title}>Run paused.</Text><Text style={styles.description}>The city will wait for you.</Text><Pressable style={styles.primary} onPress={togglePause}><Text style={styles.primaryText}>CONTINUE RUN</Text></Pressable><Pressable style={styles.secondary} disabled={saving || adBusy} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
     {hud.status === 'gameover' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>UNTIL THE NEXT RUN</Text><Text style={styles.title}>What a run.</Text><View style={styles.resultRow}><View><Text style={styles.small}>FINAL SCORE</Text><Text style={styles.resultScore}>{hud.score.toLocaleString()}</Text></View><View><Text style={styles.small}>DISTANCE</Text><Text style={styles.resultDistance}>{hud.distance} m</Text></View></View><Text style={styles.description}>Best {Math.max(best, hud.score).toLocaleString()}   ·   +{hud.coins} coins   ·   Wallet {wallet}</Text>{!!ticket.current && <><Text style={styles.description}>{uploadStatus}</Text>{!submitted.current && <Pressable style={styles.secondary} onPress={() => void upload()}><Text style={styles.secondaryText}>RETRY UPLOAD</Text></Pressable>}</>}{!ticket.current && hud.coins > 0 && <Pressable disabled={saving || adBusy || doubled} style={[styles.secondary, { paddingBottom: 20 }]} onPress={() => void doubleCoins()}><Text style={styles.secondaryText}>{doubled ? 'BONUS CLAIMED' : adBusy ? 'LOADING AD...' : 'WATCH ' + (TEST_ADS ? 'TEST ' : '') + 'AD - DOUBLE COINS'}</Text></Pressable>}<Pressable disabled={saving || adBusy} style={styles.primary} onPress={() => void retry()}><Text style={styles.primaryText}>{saving ? 'SAVING RUN...' : 'RUN AGAIN'}</Text></Pressable><Pressable disabled={saving} style={styles.secondary} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
     {renderError && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.title}>3D could not start.</Text><Text style={styles.description}>Close and reopen the updated APK. The game needs a working OpenGL graphics context.</Text><Pressable style={styles.primary} onPress={() => navigation.goBack()}><Text style={styles.primaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
   </View>;

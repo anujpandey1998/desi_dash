@@ -49,6 +49,10 @@ if (!manifest.stdout.includes("versionName='" + config.version + "'") || !manife
 const mappingFile = 'android/app/build/outputs/mapping/release/mapping.txt';
 if (fs.existsSync(mappingFile)) {
   const mapping = fs.readFileSync(mappingFile, 'utf8');
+  const workStart = mapping.indexOf('androidx.work.impl.WorkDatabase_Impl ->');
+  const workEnd = mapping.indexOf('\nandroidx.', workStart + 1);
+  const work = mapping.slice(workStart, workEnd < 0 ? undefined : workEnd);
+  if (workStart < 0 || !work.includes('void <init>()')) throw Error('Release shrinker removed the reflective WorkDatabase_Impl constructor');
   const glStart = mapping.indexOf('expo.modules.gl.GLView ->');
   const glEnd = mapping.indexOf('\nexpo.', glStart + 1);
   const gl = mapping.slice(glStart, glEnd < 0 ? undefined : glEnd);

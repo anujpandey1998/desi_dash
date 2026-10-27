@@ -7,7 +7,7 @@ export type Runner = {
   status: RunStatus; resumeStatus: 'ready' | 'running'; countdown: number; lane: number; x: number;
   jumpY: number; jumpVelocity: number; slideTime: number; distance: number; speed: number;
   coins: number; score: number; shield: boolean; grace: number; elapsed: number; accumulator: number;
-  tick: number; limit: number; nextRow: number; rowNumber: number; seed: number; milestone: number; entities: Entity[]; events: RunEvent[];
+  training: boolean; tick: number; limit: number; nextRow: number; rowNumber: number; seed: number; milestone: number; entities: Entity[]; events: RunEvent[];
 };
 function random(s: Runner) {
   s.seed = (Math.imul(1664525, s.seed) + 1013904223) >>> 0;
@@ -37,7 +37,7 @@ export function createRunner(seed = Date.now(), limit = 0): Runner {
   const s: Runner = {
     status: 'ready', resumeStatus: 'ready', countdown: 3, lane: 0, x: 0, jumpY: 0, jumpVelocity: 0,
     slideTime: 0, distance: 0, speed: RUN.baseSpeed, coins: 0, score: 0, shield: false, grace: 0,
-    elapsed: 0, accumulator: 0, tick: 0, limit, nextRow: RUN.rowGap, rowNumber: 0, seed: seed >>> 0,
+    elapsed: 0, accumulator: 0, training: false, tick: 0, limit, nextRow: RUN.rowGap, rowNumber: 0, seed: seed >>> 0,
     milestone: 500, entities: Array.from({ length: 100 }, () => ({ active: false, kind: 'coin', lane: 0, z: 0, y: 0, variant: 0 })), events: [],
   };
   for (let i = 0; i < 6; i++) row(s, -55 - i * RUN.rowGap);
@@ -76,6 +76,15 @@ function step(s: Runner) {
     return;
   }
   if (s.status !== 'running') return;
+  if (s.training) {
+    s.elapsed += dt;
+    s.x += (s.lane * RUN.laneWidth - s.x) * Math.min(1, dt * 17);
+    s.jumpVelocity -= RUN.gravity * dt;
+    s.jumpY = Math.max(0, s.jumpY + s.jumpVelocity * dt);
+    if (s.jumpY === 0) s.jumpVelocity = 0;
+    s.slideTime = Math.max(0, s.slideTime - dt);
+    return;
+  }
   s.elapsed += dt;
   s.speed = Math.min(RUN.maxSpeed, RUN.baseSpeed + s.distance / 180);
   s.distance += s.speed * dt;

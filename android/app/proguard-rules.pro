@@ -19,3 +19,6 @@
 
 # libexpo-gl calls GLContext.flush() by name through JNI.
 -keep class expo.modules.gl.GLContext { *; }
+
+# WorkManager Room database is instantiated through reflection during startup.
+-keep class androidx.work.impl.WorkDatabase_Impl { public <init>(); }

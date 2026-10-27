@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CHALLENGE_VERSION, freshMissions, missionDay, type Challenge, type Entry, type MissionProgress, type RunInput, type Ticket } from '../game3d/challenges';
+import { CHALLENGE_VERSION, freshMissions, missionDay, type Challenge, type Entry, type MissionProgress, type RunInput, type Ticket, type WeeklyLeague } from '../game3d/challenges';
 const prefix = 'rooftop.v1.';
 export async function loadServer() { return (await AsyncStorage.getItem(prefix + 'server')) || ''; }
 export async function saveServer(url: string) {
@@ -21,7 +21,7 @@ async function api(path: string, body?: unknown) {
   } finally { clearTimeout(timeout); }
 }
 export async function createChallenge(): Promise<Challenge> { return api('/rooms', { version: CHALLENGE_VERSION }); }
-export async function getChallenge(code: string): Promise<{ challenge: Challenge; entries: Entry[] }> { return api('/rooms/' + encodeURIComponent(code.trim().toUpperCase())); }
+export async function getChallenge(code: string): Promise<{ challenge: Challenge; entries: Entry[]; league: WeeklyLeague }> { return api('/rooms/' + encodeURIComponent(code.trim().toUpperCase())); }
 export async function startChallenge(code: string): Promise<Ticket> { return api('/rooms/' + encodeURIComponent(code) + '/runs', { name: await loadPlayerName(), version: CHALLENGE_VERSION }); }
 export async function submitChallenge(ticket: Ticket, ticks: number, inputs: RunInput[]) { await api('/rooms/' + ticket.challenge.code + '/results', { token: ticket.token, ticks, inputs }); }
 let queue: Promise<unknown> = Promise.resolve();
@@ -40,7 +40,7 @@ export async function trackEvent(event: string, value = 1) {
 
 export async function saveCompletedRun(score: number, distance: number, coins: number, completed: boolean) {
   const p = await loadMissions();
-  if (completed) { p.runs++; p.distance += Math.floor(distance); p.coins += coins; }
+  if (completed) { p.runs++; p.distance = Math.max(p.distance, Math.floor(distance)); p.coins += coins; }
   const best = Math.max(Number(await AsyncStorage.getItem('neon-dash.high-score.v1')) || 0, score);
   const wallet = (Number(await AsyncStorage.getItem('neon-dash.wallet-coins.v1')) || 0) + coins;
   await AsyncStorage.multiSet([['neon-dash.high-score.v1', String(best)], ['neon-dash.wallet-coins.v1', String(wallet)], [prefix + 'missions', JSON.stringify(p)]]);

@@ -20,20 +20,20 @@
           "android": {
             "minSdkVersion": 33,
             "targetSdkVersion": 36,
-            "extraProguardRules": "# Expo GLView is constructed reflectively by Expo ViewDefinitionBuilder.\n-keep class expo.modules.gl.GLView { *; }\n# libexpo-gl calls GLContext.flush() by name through JNI.\n-keep class expo.modules.gl.GLContext { *; }"
+            "extraProguardRules": "# Expo GLView is constructed reflectively by Expo ViewDefinitionBuilder.\n-keep class expo.modules.gl.GLView { *; }\n# libexpo-gl calls GLContext.flush() by name through JNI.\n-keep class expo.modules.gl.GLContext { *; }\n# WorkManager creates its generated Room database reflectively.\n-keep class androidx.work.impl.WorkDatabase_Impl { public <init>(); }"
           }
         }
       ],
       "./plugins/withShortCmakePaths.cjs",
       "expo-asset",
-      "./plugins/withGameGraphics.cjs",
       [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "delayAppMeasurementInit": true
         }
-      ]
+      ],
+      "./plugins/withGameGraphics.cjs"
     ],
     "android": {
       "package": "com.anujpandey.neondash",

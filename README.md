@@ -6,16 +6,18 @@ A portrait Android 13+ runner built with React Native, Expo native modules and T
 
 - Original rooftop setting: tiled roofs, water tanks, solar panels, clotheslines and an animated courier. No trains or railway assets.
 - Offline endless runs with swipe/button controls, shields, pause/resume and saved scores/coins.
-- Daily distance/coin/run missions (UTC reset) with claim-once coin rewards.
+- Daily run, best-single-run distance, and coin missions (UTC reset) with claim-once coin rewards. The 1,000 m mission requires reaching the distance in one run.
 - Existing three outfits remain free; two additional outfits unlock with earned coins.
 - Standard/Low scenery detail in Settings.
 - Friend rooms with six-character codes, native invite sharing, seven-day expiry, leaderboards and matching seeded 90-second courses.
+- Weekly room leagues with a Monday-UTC reset, each player's best verified weekly score, and top-three rank badges.
 - A cyan replay ghost of the room's highest verified run, when a previous result exists.
 - Server-side physics replay validation, opaque single-use run tickets, bounded requests and persistent room data.
 - Optional rewarded ads to double solo-run coins. Only the SDK's earned-reward event grants a bonus. Challenge scores cannot be boosted by ads.
+- First-solo-run interactive control tutorial and solo-only interstitials offered after four completed runs, with a three-minute cooldown and never during gameplay.
 - Local counters for finished runs and rewarded requests/completions. These are device-local diagnostics, not a hosted analytics dashboard or revenue reporting.
 
-This is asynchronous friend competition. Players do not need to be online together. Live 2–4 player racing, public matchmaking, accounts/cloud saves, global weekly leagues, rooftop gap physics and additional biomes are future work.
+This is asynchronous friend competition. Players do not need to be online together. The current test release is tracked on release/rooftop-rush-1.0; see docs/LAUNCH_STATUS.md for verified features and remaining launch setup.
 
 ## Run and test
 
@@ -56,8 +58,16 @@ To enable monetization, replace the test Android app ID in `app.json` (both the 
 
 The implementation follows the [Google Mobile Ads integration](https://docs.page/invertase/react-native-google-mobile-ads) and [rewarded ads guide](https://developers.google.com/admob/android/rewarded).
 
+Set `EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID` to your interstitial unit before building to replace the interstitial test unit. If unset, the app uses Google's interstitial test ID.
+
 ## Native crash regression
 
 Preserve the targeted ProGuard rules for `expo.modules.gl.GLView` (reflective constructor) and `expo.modules.gl.GLContext` (JNI `flush()` callback). The APK verifier checks both in the release mapping, plus SDK/version, embedded JS, ARM64 ELF 16 KB alignment and ZIP alignment. The scene synchronously guards native GL calls during unmount so delayed renderer cleanup cannot access an already destroyed GLView.
 
 The previous 0.2.1 APK passed Android 15 emulator launch, rendered menu/gameplay, pause/resume and game-to-menu regression checks. The test emulator required ARM translation; physical Redmi testing is performed by the owner.
+
+## Test release completion
+
+See [launch status](docs/LAUNCH_STATUS.md) for the inherited-work audit and launch prerequisites. The tutorial performs real movement on a stationary practice course. Identical network retries of a verified result are idempotent.
+
+To containerize the test server: `docker build -f server/Dockerfile -t rooftop-challenges .`, then `docker run -p 8787:8787 -v rooftop-data:/data rooftop-challenges`. Put the service behind HTTPS before connecting release APKs.
