@@ -1,6 +1,6 @@
 {
   "name": "neon-dash",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -15,7 +15,9 @@
     "android:verify": "node scripts/verify-apk.cjs",
     "android:sync": "expo prebuild --platform android --no-install",
     "preview:3d": "node scripts/preview-3d.cjs",
-    "test:render": "node scripts/check-3d-render.cjs"
+    "test:render": "node scripts/check-3d-render.cjs",
+    "server": "node server/index.cjs",
+    "test:social": "node --test scripts/social.test.cjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -34,6 +36,7 @@
     "react": "19.3.0",
     "react-native": "0.88.0",
     "react-native-gesture-handler": "~3.3.0",
+    "react-native-google-mobile-ads": "^17.4.0",
     "react-native-safe-area-context": "^5.10.1",
     "react-native-screens": "^4.30.0",
     "three": "^0.180.0"

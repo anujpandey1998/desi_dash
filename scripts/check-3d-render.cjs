@@ -18,6 +18,8 @@ const {startPreview}=require('./preview-3d.cjs');
    for(let i=0;i<180;i++)t.advance(1/60);
    const laneMoved=Math.abs(s.x-safe*2.8)<0.02;
    t.jump();for(let i=0;i<15;i++)t.advance(1/60);
+   t.world.update(s,1/60,t.camera,false,{...s,x:-2.8,jumpY:1.5,status:'running'});
+   const ghost=t.world.root.getObjectByName('GhostCourier');if(!ghost.visible||ghost.position.x!==-2.8||ghost.position.y!==1.5)throw Error('Replay ghost pose incorrect');
    const jumped=s.jumpY>1,meshJumped=t.world.root.getObjectByName('Runner').position.y>1;
    return {laneMoved,jumped,meshJumped,status:s.status,...t.stats()};
   });

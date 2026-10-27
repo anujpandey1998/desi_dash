@@ -23,7 +23,7 @@ export function SplashScreen({ navigation }: { navigation: any }) {
   return (
     <View style={styles.root}>
       <Animated.View style={[styles.logo, { opacity: fade }]}> 
-        <Text style={styles.title}>NEON DASH</Text>
+        <Text style={styles.title}>ROOFTOP RUSH</Text>
         <Text style={styles.subtitle}>The city is waking up...</Text>
       </Animated.View>
     </View>

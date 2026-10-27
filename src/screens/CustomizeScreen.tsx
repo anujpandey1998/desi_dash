@@ -1,4 +1,4 @@
-import { loadOutfit, OUTFITS, saveOutfit } from '../game3d/profile';
+import { loadOutfit, OUTFITS, OUTFIT_PRICES, loadOwnedOutfits, unlockOutfit } from '../game3d/profile';
 import { MenuLayout } from '../components/MenuLayout';
 import React, { useEffect, useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -10,8 +10,11 @@ export function CustomizeScreen({ navigation }: { navigation: any }) {
   const [faceUri, setFaceUri] = useState<string | null>(null);
 
   const [outfit, setOutfit] = useState(0);
+  const [owned, setOwned] = useState<number[]>([0, 1, 2]);
+  const [buying, setBuying] = useState(false);
 
   useEffect(() => {
+    loadOwnedOutfits().then(setOwned).catch(() => {});
     loadOutfit().then(setOutfit).catch(() => {});
     loadRunnerPhoto().then(setFaceUri).catch(() => {});
   }, []);
@@ -21,7 +24,7 @@ export function CustomizeScreen({ navigation }: { navigation: any }) {
       if (camera) {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) {
-          Alert.alert('Camera permission needed', 'Allow Neon Dash to open the camera for your runner face.');
+          Alert.alert('Camera permission needed', 'Allow Rooftop Rush to open the camera for your runner face.');
           return;
         }
       }
@@ -59,8 +62,8 @@ export function CustomizeScreen({ navigation }: { navigation: any }) {
       <Text style={styles.title}>YOUR RUNNER</Text>
 
       <Text style={{ color: '#a8c3c9', marginBottom: 14 }}>Choose your 3D runner's hoodie</Text>
-      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
-        {OUTFITS.map((item, index) => <Pressable accessibilityLabel={item.name + ' outfit'} key={item.name} onPress={() => { setOutfit(index); void saveOutfit(index); }} style={{ flex: 1, backgroundColor: item.color, borderRadius: 14, paddingVertical: 22, alignItems: 'center', borderWidth: 3, borderColor: outfit === index ? '#fff1ce' : 'transparent' }}><Text style={{ color: '#fff', fontWeight: '900' }}>{item.name}{outfit === index ? ' ?' : ''}</Text></Pressable>)}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+        {OUTFITS.map((item, index) => <Pressable accessibilityLabel={item.name + ' outfit'} key={item.name} disabled={buying} onPress={async () => { setBuying(true); try { setOwned(await unlockOutfit(index)); setOutfit(index); } catch (e) { Alert.alert('Outfit', e instanceof Error ? e.message : 'Try again.'); } finally { setBuying(false); } }} style={{ width: '46%', backgroundColor: item.color, borderRadius: 14, paddingVertical: 22, alignItems: 'center', borderWidth: 3, borderColor: outfit === index ? '#fff1ce' : 'transparent' }}><Text style={{ color: '#fff', fontWeight: '900' }}>{item.name}{outfit === index ? ' ?' : owned.includes(index) ? '' : ' ? ' + OUTFIT_PRICES[index] + ' coins'}</Text></Pressable>)}
       </View>
       <Text style={{ color: '#a8c3c9', marginBottom: 10 }}>Optional profile photo (shown in your HUD)</Text>
       <View style={styles.previewArea}>

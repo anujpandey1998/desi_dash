@@ -1,59 +1,32 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-const AD_CONSENT_KEY = 'neon-dash.ads-consent.v1';
-
-export async function loadAdConsent(): Promise<boolean> {
-  const raw = await AsyncStorage.getItem(AD_CONSENT_KEY);
-  return raw === 'true';
-}
-
-export async function saveAdConsent(consented: boolean): Promise<boolean> {
-  const next = Boolean(consented);
-  await AsyncStorage.setItem(AD_CONSENT_KEY, String(next));
-  return next;
-}
-
+import mobileAds, { AdsConsent, AdEventType, RewardedAd, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { trackEvent } from './socialService';
+export const TEST_ADS = !process.env.EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID;
+let initialized: Promise<boolean> | null = null, showing = false;
 export async function initializeAds(): Promise<boolean> {
-  const adMob = (() => {
-    try {
-      return require('expo-ads-admob');
-    } catch (error) {
-      return null;
-    }
-  })();
-
-  if (!adMob) return false;
-
-  try {
-    if (typeof adMob.initialize === 'function') {
-      await adMob.initialize();
-    }
-    return true;
-  } catch (error) {
-    return false;
-  }
+ if (!initialized) initialized = (async () => {
+  try { const { canRequestAds } = await AdsConsent.gatherConsent(); if (!canRequestAds) return false; await mobileAds().initialize(); return true; }
+  catch { return false; }
+ })();
+ const ready = await initialized; if (!ready) initialized = null; return ready;
 }
-
-export async function showBannerAd(): Promise<boolean> {
-  const consented = await loadAdConsent();
-  if (!consented) return false;
-
-  const adMob = (() => {
-    try {
-      return require('expo-ads-admob');
-    } catch (error) {
-      return null;
-    }
-  })();
-
-  if (!adMob || typeof adMob.showAd === 'undefined') {
-    return false;
-  }
-
-  try {
-    await adMob.showAd();
-    return true;
-  } catch (error) {
-    return false;
-  }
+export async function showAdsPrivacyOptions() { await AdsConsent.showPrivacyOptionsForm(); }
+// Only a real EARNED_REWARD event grants coins. A load failure or dismissal grants nothing.
+export async function showCoinReward(): Promise<boolean> {
+ if (showing) return false; showing = true;
+ try {
+  if (!await initializeAds()) return false;
+  const ad = RewardedAd.createForAdRequest(process.env.EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID || TestIds.REWARDED);
+  return await new Promise<boolean>(resolve => {
+   let earned = false, finished = false;
+   const listeners: (() => void)[] = [];
+   const finish = () => { if (finished) return; finished = true; clearTimeout(timer); listeners.forEach(unsubscribe => unsubscribe()); resolve(earned); };
+   // Timeout applies only to loading, never to an ad already being watched.
+   const timer = setTimeout(finish, 25000);
+   listeners.push(ad.addAdEventListener(RewardedAdEventType.LOADED, () => { clearTimeout(timer); void ad.show().catch(finish); }));
+   listeners.push(ad.addAdEventListener(RewardedAdEventType.EARNED_REWARD, () => { earned = true; void trackEvent('rewarded_completed').catch(() => {}); }));
+   listeners.push(ad.addAdEventListener(AdEventType.CLOSED, finish));
+   listeners.push(ad.addAdEventListener(AdEventType.ERROR, finish));
+   ad.load(); void trackEvent('rewarded_requested').catch(() => {});
+  });
+ } finally { showing = false; }
 }

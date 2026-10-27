@@ -1,15 +1,20 @@
-﻿import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MenuLayout } from '../components/MenuLayout';
 import { loadSoundSetting, loadVibrationSetting, setSoundEnabled, setVibrationEnabled } from '../services/audioService';
+import { showAdsPrivacyOptions, TEST_ADS } from '../services/adService';
+import { loadGraphicsQuality, saveGraphicsQuality } from '../game3d/profile';
+import { Alert } from 'react-native';
 export function SettingsScreen({ navigation }: { navigation: any }) {
+  const [quality, setQuality] = useState<'low' | 'standard'>('standard');
+  useEffect(() => { loadGraphicsQuality().then(setQuality).catch(() => {}); }, []);
   const [sound, setSound] = useState(true), [vibration, setVibration] = useState(true);
   useEffect(() => { loadSoundSetting().then(setSound).catch(() => {}); loadVibrationSetting().then(setVibration).catch(() => {}); }, []);
   return <MenuLayout style={styles.root}>
     <Text style={styles.eyebrow}>MAKE IT YOURS</Text><Text style={styles.title}>Settings.</Text>
     <View style={styles.row}><View><Text style={styles.label}>City sounds</Text><Text style={styles.hint}>Music and game effects</Text></View><Pressable accessibilityLabel="Toggle sound" style={[styles.toggle, sound && styles.enabled]} onPress={() => { setSound(!sound); void setSoundEnabled(!sound).catch(() => {}); }}><Text style={styles.toggleText}>{sound ? 'ON' : 'OFF'}</Text></Pressable></View>
     <View style={styles.row}><View><Text style={styles.label}>Vibration</Text><Text style={styles.hint}>Feel collisions and impacts</Text></View><Pressable accessibilityLabel="Toggle vibration" style={[styles.toggle, vibration && styles.enabled]} onPress={() => { setVibration(!vibration); void setVibrationEnabled(!vibration).catch(() => {}); }}><Text style={styles.toggleText}>{vibration ? 'ON' : 'OFF'}</Text></Pressable></View>
-    <View style={styles.guide}><Text style={styles.guideTitle}>OWN THE TRACKS</Text><Text style={styles.guideText}>Swipe left / right to change lanes.{ '\n' }Swipe up or tap to jump barriers.{ '\n' }Swipe down to slide under red gates.{ '\n' }Dodge trains. Collect coins and blue shields.{ '\n\n' }Use the on-screen buttons if you prefer. A shield absorbs one crash. Your run pauses automatically when you leave the app.</Text></View>
+    <View style={styles.row}><View><Text style={styles.label}>Graphics detail</Text><Text style={styles.hint}>Low draws less distant scenery</Text></View><Pressable style={styles.toggle} onPress={() => { const next = quality === 'low' ? 'standard' : 'low'; setQuality(next); void saveGraphicsQuality(next).catch(() => {}); }}><Text style={styles.toggleText}>{quality.toUpperCase()}</Text></Pressable></View><Pressable style={styles.row} onPress={() => void showAdsPrivacyOptions().catch(() => Alert.alert('Ad privacy', 'Privacy options are unavailable or not required in your region.'))}><View><Text style={styles.label}>Ad privacy choices</Text><Text style={styles.hint}>{TEST_ADS ? 'Test ads enabled - no real earnings' : 'Manage your advertising privacy'}</Text></View></Pressable><View style={styles.guide}><Text style={styles.guideTitle}>OWN THE ROOFTOPS</Text><Text style={styles.guideText}>Swipe left / right to change lanes.{ '\n' }Swipe up or tap to jump barriers.{ '\n' }Swipe down to slide under clotheslines.{ '\n' }Dodge water tanks. Collect coins and blue shields.{ '\n\n' }Use the on-screen buttons if you prefer. A shield absorbs one crash. Your run pauses automatically when you leave the app.</Text></View>
     <Pressable style={styles.back} onPress={() => navigation.goBack()}><Text style={styles.backText}>BACK TO CITY</Text></Pressable>
   </MenuLayout>;
 }

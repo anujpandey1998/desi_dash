@@ -1,11 +1,12 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import { RUN, type Runner } from './simulation';
 
-const PALETTE = ['#ef6c35', '#2ba6a0', '#6963ba'];
+const PALETTE = ['#ef6c35', '#2ba6a0', '#6963ba', '#e8ae35', '#cf668b'];
 export function createRunnerWorld() {
   const root = new THREE.Group();
   const materials = new Map<string, THREE.MeshStandardMaterial>();
   const geometries: THREE.BufferGeometry[] = [];
+  const cylinders = new Map<string, THREE.CylinderGeometry>();
   const boxes = new Map<string, THREE.BoxGeometry>();
   function mat(color: string, metalness = 0, roughness = 0.8) {
     const key = `${color}/${metalness}/${roughness}`;
@@ -19,7 +20,9 @@ export function createRunnerWorld() {
     const m = new THREE.Mesh(g, material || mat(color)); m.position.set(...at); parent.add(m); return m;
   }
   function cylinder(parent: THREE.Object3D, radius: number, length: number, at: [number, number, number], color: string) {
-    const g = new THREE.CylinderGeometry(radius, radius, length, 10); geometries.push(g);
+    const key = radius + '/' + length;
+    let g = cylinders.get(key);
+    if (!g) { g = new THREE.CylinderGeometry(radius, radius, length, 10); cylinders.set(key, g); geometries.push(g); }
     const m = new THREE.Mesh(g, mat(color)); m.position.set(...at); parent.add(m); return m;
   }
   function sphere(parent: THREE.Object3D, radius: number, at: [number, number, number], color: string) {
@@ -43,30 +46,23 @@ export function createRunnerWorld() {
   const sun = new THREE.DirectionalLight('#fff0d1', 3.2); sun.position.set(-16, 28, 15); root.add(sun);
   const fill = new THREE.DirectionalLight('#b4e6fb', 0.7); fill.position.set(16, 10, -20); root.add(fill);
 
-  box(root, [70, 0.25, 250], [0, -0.25, -90], '#c8b594');
-  box(root, [10, 0.1, 230], [0, -0.06, -90], '#726c5b');
-  for (const lane of [-1, 0, 1]) {
-    for (const side of [-1, 1]) box(root, [0.09, 0.14, 230], [lane * RUN.laneWidth + side * 0.72, 0.11, -90], '#b4bec2', mat('#b4bec2', 0.7, 0.35));
-  }
+  // Rooftop tile route and parapets; all models are built from primitives.
+  box(root, [10, 1.1, 250], [0, -0.6, -90], '#be8b6e');
+  box(root, [9.5, 0.08, 250], [0, -0.04, -90], '#e0c9a6');
   for (const side of [-1, 1]) {
-    box(root, [1.4, 0.35, 230], [side * 5.35, 0.1, -90], '#ddd3b6');
-    box(root, [0.16, 0.42, 230], [side * 4.65, 0.13, -90], '#ecb941');
+    box(root, [0.3, 0.6, 250], [side * 4.8, 0.25, -90], '#eac8a2');
+    box(root, [0.4, 0.1, 250], [side * 4.8, 0.6, -90], '#c37858');
   }
   const dummy = new THREE.Object3D();
   function instances(geometry: THREE.BufferGeometry, material: THREE.Material, count: number) {
     geometries.push(geometry);
     const mesh = new THREE.InstancedMesh(geometry, material, count); mesh.frustumCulled = false; root.add(mesh); return mesh;
   }
-  const ties = instances(new THREE.BoxGeometry(1.9, 0.10, 0.26), mat('#4a443e'), 3 * 125);
-  for (let lane = 0; lane < 3; lane++) for (let i = 0; i < 125; i++) {
-    dummy.position.set((lane - 1) * RUN.laneWidth, 0.01, 15 - i * 1.6); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); ties.setMatrixAt(lane * 125 + i, dummy.matrix);
+  const tiles = instances(new THREE.BoxGeometry(9.3, 0.012, 0.025), mat('#b99d7f'), 125);
+  for (let i = 0; i < 125; i++) {
+    dummy.position.set(0, 0.012, 15 - i * 1.6); dummy.updateMatrix(); tiles.setMatrixAt(i, dummy.matrix);
   }
-  const ballast = instances(new THREE.BoxGeometry(1, 1, 1), mat('#8a826b'), 800);
-  for (let i = 0; i < 800; i++) {
-    dummy.position.set(Math.sin(i * 28.12) * 4.1, 0.016, 14 - (i * 7.37 % 205));
-    dummy.rotation.set(0, i * 1.23, 0); dummy.scale.set(0.05 + i % 3 * 0.018, 0.035, 0.07); dummy.updateMatrix(); ballast.setMatrixAt(i, dummy.matrix);
-  }
-  dummy.rotation.set(0, 0, 0);
+  for (const x of [-RUN.laneWidth / 2, RUN.laneWidth / 2]) box(root, [0.035, 0.014, 230], [x, 0.015, -90], '#bd9d79');
   const scenery = new THREE.Group(); root.add(scenery);
   const buildingGeometry = new THREE.BoxGeometry(1, 1, 1); geometries.push(buildingGeometry);
   const buildings = new THREE.InstancedMesh(buildingGeometry, mat('#ffffff'), 56); buildings.frustumCulled = false; scenery.add(buildings);
@@ -79,11 +75,11 @@ export function createRunnerWorld() {
   for (let i = 0; i < 56; i++) {
     const side = i % 2 ? 1 : -1, index = Math.floor(i / 2), h = [6, 9, 7, 11, 5, 8][index % 6], x = side * (10 + (index % 3) * 0.8), z = 15 - index * 10;
     dummy.rotation.set(0, 0, 0);
-    dummy.position.set(x, h / 2, z); dummy.scale.set(5.5, h, 8); dummy.updateMatrix(); buildings.setMatrixAt(i, dummy.matrix); buildings.setColorAt(i, new THREE.Color(houseColors[(index + (side > 0 ? 2 : 0)) % houseColors.length]));
-    dummy.position.set(x, h + 0.16, z); dummy.scale.set(5.8, 0.32, 8.3); dummy.updateMatrix(); roof.setMatrixAt(i, dummy.matrix);
-    dummy.position.set(x - side * 2.78, 0.92, z + 2.5); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); doors.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x, h / 2 - 6, z); dummy.scale.set(5.5, h, 8); dummy.updateMatrix(); buildings.setMatrixAt(i, dummy.matrix); buildings.setColorAt(i, new THREE.Color(houseColors[(index + (side > 0 ? 2 : 0)) % houseColors.length]));
+    dummy.position.set(x, h - 6 + 0.16, z); dummy.scale.set(5.8, 0.32, 8.3); dummy.updateMatrix(); roof.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x - side * 2.78, -5.08, z + 2.5); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); doors.setMatrixAt(i, dummy.matrix);
     for (let j = 0; j < 8; j++) {
-      dummy.position.set(x - side * 2.8, 1.4 + (j % 4) * Math.min(2.3, (h - 1.8) / 4), z - 2.1 + Math.floor(j / 4) * 3.8);
+      dummy.position.set(x - side * 2.8, -4.6 + (j % 4) * Math.min(2.3, (h - 1.8) / 4), z - 2.1 + Math.floor(j / 4) * 3.8);
       dummy.rotation.set(0, Math.PI / 2, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); windows.setMatrixAt(i * 8 + j, dummy.matrix); dummy.position.x += side * 0.04; dummy.updateMatrix(); frames.setMatrixAt(i * 8 + j, dummy.matrix);
     }
   }
@@ -97,12 +93,11 @@ export function createRunnerWorld() {
   };
   const side = (i: number) => i % 2 ? 1 : -1;
   const depth = (i: number) => 10 - Math.floor(i / 2) * 27;
-  decor(new THREE.BoxGeometry(0.18, 6.3, 0.18), '#536b69', 16, i => [side(i) * 5.8, 3.15, depth(i)]);
-  decor(new THREE.BoxGeometry(0.5, 0.25, 0.7), '#f3d5a1', 16, i => [side(i) * 5.8, 6.1, depth(i)]);
-  decor(new THREE.CylinderGeometry(0.16, 0.16, 3.3, 8), '#866748', 16, i => [side(i) * 7.2, 1.65, depth(i) - 9]);
-  decor(new THREE.SphereGeometry(1.3, 10, 8), '#527d57', 16, i => [side(i) * 7.2, 3.6, depth(i) - 9], true);
-  decor(new THREE.BoxGeometry(11.8, 0.18, 0.22), '#657a71', 8, i => [0, 6.4, 10 - i * 27]);
-  decor(new THREE.BoxGeometry(0.025, 0.025, 27), '#647672', 16, i => [side(i) * 1.8, 6.55, depth(i) - 13.5]);
+  decor(new THREE.CylinderGeometry(0.7, 0.7, 1.5, 10), '#3a5360', 16, i => [side(i) * 6, 0.75, depth(i)]);
+  decor(new THREE.BoxGeometry(1.8, 0.12, 2.5), '#234f70', 16, i => [side(i) * 6.5, 0.4, depth(i) - 8]);
+  decor(new THREE.BoxGeometry(0.12, 3.2, 0.12), '#b07c51', 16, i => [side(i) * 5.8, 1.6, depth(i) - 14]);
+  decor(new THREE.BoxGeometry(11.6, 0.025, 0.025), '#786959', 8, i => [0, 3.1, 10 - i * 27 - 14]);
+  decor(new THREE.BoxGeometry(0.8, 0.65, 0.025), '#d88c55', 24, i => [(i % 3 - 1) * 3, 2.75, 10 - Math.floor(i / 3) * 27 - 14]);
 
   // Articulated original runner: hoodie, backpack, limbs and sneakers.
   const runner = new THREE.Group(); runner.name = 'Runner'; root.add(runner);
@@ -135,24 +130,19 @@ export function createRunnerWorld() {
   const shieldMaterial = new THREE.MeshBasicMaterial({ color: '#55e8e2' });
   const shieldRing = new THREE.Mesh(shieldGeometry, shieldMaterial); shieldRing.position.y = 1; runner.add(shieldRing);
 
+  const ghostRunner = runner.clone(true); ghostRunner.name = 'GhostCourier';
+  const ghostMaterial = new THREE.MeshBasicMaterial({ color: '#6affef', transparent: true, opacity: 0.3, depthWrite: false });
+  ghostRunner.traverse(object => { if (object instanceof THREE.Mesh) object.material = ghostMaterial; });
+  ghostRunner.visible = false; root.add(ghostRunner);
   const slots: THREE.Group[] = [];
-  const paint = ['#247b9d', '#d26444', '#42938b'];
-  const trainWindowGeometry = new THREE.BoxGeometry(0.045, 0.78, 1.25); geometries.push(trainWindowGeometry);
   for (let i = 0; i < 28; i++) {
     const slot = new THREE.Group(); root.add(slot); slots.push(slot);
-    const train = new THREE.Group(); train.name = 'train'; slot.add(train);
-    box(train, [2.35, 0.025, 9.6], [0, 0.025, 0], '#55594b');
-    box(train, [2.13, 2.8, 9.4], [0, 1.66, 0], paint[0]);
-    box(train, [2.19, 0.27, 9.5], [0, 0.54, 0], '#293c47');
-    box(train, [2.17, 0.22, 9.55], [0, 3.15, 0], '#e7d9bd');
-    box(train, [1.75, 0.88, 0.06], [0, 2.12, 4.73], '#203b4b', mat('#203b4b', 0.25, 0.35));
-    box(train, [1.1, 0.09, 0.07], [0, 0.99, 4.76], '#f5d994');
-    const trainWindows = new THREE.InstancedMesh(trainWindowGeometry, mat('#203d4d'), 8); trainWindows.frustumCulled = false; train.add(trainWindows);
-    for (let w = 0; w < 8; w++) {
-      dummy.position.set((w < 4 ? -1 : 1) * 1.08, 2.16, -3.3 + (w % 4) * 2.1); dummy.scale.set(1, 1, 1); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); trainWindows.setMatrixAt(w, dummy.matrix);
-    }
-    for (const side of [-1, 1]) {
-      box(train, [0.21, 0.38, 6.9], [side * 0.78, 0.23, 0], '#243038');
+    const tank = new THREE.Group(); tank.name = 'tank'; slot.add(tank);
+    box(tank, [2.2, 0.22, 9.6], [0, 0.11, 0], '#b59075');
+    for (const z of [-3.2, 0, 3.2]) {
+      cylinder(tank, 0.98, 2.6, [0, 1.52, z], '#375967');
+      cylinder(tank, 1.02, 0.12, [0, 2.84, z], '#253d49');
+      cylinder(tank, 0.24, 0.15, [0, 2.96, z], '#182f39');
     }
     const barrier = new THREE.Group(); barrier.name = 'barrier'; slot.add(barrier);
     for (const side of [-1, 1]) box(barrier, [0.16, 1.0, 0.22], [side * 0.91, 0.5, 0], '#d5d7c9');
@@ -160,7 +150,7 @@ export function createRunnerWorld() {
     for (const x of [-0.7, 0, 0.7]) { const stripe = box(barrier, [0.21, 0.64, 0.015], [x, 0.68, 0.22], '#493c30'); stripe.rotation.z = -0.35; }
     const arch = new THREE.Group(); arch.name = 'arch'; slot.add(arch);
     for (const side of [-1, 1]) box(arch, [0.18, 2.4, 0.24], [side * 1.0, 1.2, 0], '#576c69');
-    box(arch, [2.22, 1.05, 0.62], [0, 1.85, 0], '#d85d42');
+    box(arch, [2.22, 1.05, 0.62], [0, 1.85, 0], '#e7aa6a');
     box(arch, [1.7, 0.10, 0.025], [0, 1.4, 0.33], '#f8d9b1');
     slot.visible = false;
   }
@@ -169,16 +159,18 @@ export function createRunnerWorld() {
   const pickups = instances(new THREE.OctahedronGeometry(0.45), mat('#41cfc9', 0.4, 0.25), 10); pickups.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   coins.count = 0; pickups.count = 0;
   let lastX = 0;
+  const fog = new THREE.Fog('#d4dfcc', 42, 155);
   return {
     root,
     configure(scene: THREE.Scene, camera: THREE.PerspectiveCamera) {
-      scene.background = new THREE.Color('#9bc3cc'); scene.fog = new THREE.Fog('#d4dfcc', 42, 155);
+      scene.background = new THREE.Color('#9bc3cc'); scene.fog = fog;
       camera.fov = 65; camera.near = 0.1; camera.far = 220; camera.position.set(0, 5.2, 10.5); camera.lookAt(0, 1.1, -13); camera.updateProjectionMatrix();
     },
+    setQuality(low: boolean) { windows.count = frames.count = low ? 224 : 448; buildings.count = roof.count = doors.count = low ? 28 : 56; fog.far = low ? 100 : 155; },
     setOutfit(index: number) { hoodie.color.set(PALETTE[index % PALETTE.length]); },
-    update(s: Runner, delta: number, camera: THREE.PerspectiveCamera, preview = false) {
+    update(s: Runner, delta: number, camera: THREE.PerspectiveCamera, preview = false, ghost?: Runner) {
       const t = s.distance, stride = preview ? t * 2 : s.elapsed * (11.5 + s.speed * 0.18), grounded = s.jumpY < 0.02, sliding = s.slideTime > 0;
-      ties.position.z = t % 1.6; ballast.position.z = t % 1.6; scenery.position.z = t % 60; structures.position.z = t % 27;
+      tiles.position.z = t % 1.6; scenery.position.z = t % 60; structures.position.z = t % 27;
       runner.position.set(s.x, s.jumpY + (grounded && !sliding ? Math.abs(Math.sin(stride)) * 0.045 : 0), 0);
       runner.scale.y = sliding ? 0.44 : 1;
       runner.rotation.z = THREE.MathUtils.damp(runner.rotation.z, -(s.x - lastX) * 1.8, 10, delta); lastX = s.x;
@@ -192,6 +184,16 @@ export function createRunnerWorld() {
       shadow.position.x = s.x; shadow.scale.setScalar(Math.max(0.4, 1 - s.jumpY * 0.18)); shadowMaterial.opacity = 0.24 - s.jumpY * 0.045;
       shieldRing.visible = s.shield || s.grace > 0; shieldRing.rotation.y += delta * 1.6;
       runner.visible = s.grace <= 0 || Math.floor(s.elapsed * 12) % 2 === 0;
+      ghostRunner.visible = !!ghost && ghost.status !== 'gameover';
+      if (ghost && ghostRunner.visible) {
+        ghostRunner.position.set(ghost.x, ghost.jumpY, 0);
+        ghostRunner.scale.y = ghost.slideTime > 0 ? 0.44 : 1;
+        const copyPose = (source: THREE.Object3D, target: THREE.Object3D) => {
+          target.rotation.copy(source.rotation);
+          for (let i = 0; i < source.children.length; i++) copyPose(source.children[i], target.children[i]);
+        };
+        copyPose(runner, ghostRunner);
+      }
       let obstacleCount = 0, coinCount = 0, pickupCount = 0;
       for (const e of s.entities) {
         if (!e.active || e.z < -RUN.drawDistance || e.z > 15) continue;
@@ -216,7 +218,7 @@ export function createRunnerWorld() {
       root.traverse(object => { if (object instanceof THREE.InstancedMesh) object.dispose(); });
       const disposed = new Set<THREE.BufferGeometry>();
       for (const geometry of geometries) if (!disposed.has(geometry)) { geometry.dispose(); disposed.add(geometry); }
-      for (const material of materials.values()) material.dispose(); shadowMaterial.dispose(); shieldMaterial.dispose(); skyMaterial.dispose(); sunMaterial.dispose();
+      for (const material of materials.values()) material.dispose(); shadowMaterial.dispose(); ghostMaterial.dispose(); shieldMaterial.dispose(); skyMaterial.dispose(); sunMaterial.dispose();
       // The React primitive owns scene attachment; disposed buffers can be recreated during Strict Mode.
     },
   };

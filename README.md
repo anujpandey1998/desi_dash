@@ -1,74 +1,63 @@
-# Neon Dash 3D
+# Rooftop Rush
 
-An original third-person, three-lane rail runner for Android 13+. The game uses actual 3D meshes, perspective camera, lighting and depth through Three.js / React Three Fiber / native Expo GL. It replaces the earlier 2D side-scrolling game.
+A portrait Android 13+ runner built with React Native, Expo native modules and Three.js. The working Neon Dash 0.2.1 release is preserved on `main`; `feature/rooftop-friends` contains Rooftop Rush 0.3.0.
 
-## Game
+## Included on this branch
 
-- Animated human runner with a hoodie, backpack and articulated arms/legs.
-- Three railway lanes, city buildings, foliage, overhead structures and trains.
-- Swipe left/right to dodge, up or tap to jump barriers, down to slide under red gates.
-- On-screen controls provide the same actions without swipe gestures.
-- Collect coins and blue shields. A shield absorbs one collision with brief recovery time.
-- Fixed-step physics, increasing speed, 500 m checkpoints, pause/resume and automatic background pause.
-- Persistent best score, coin wallet, three hoodie colors and optional HUD profile photo.
-- Portrait presentation, responsive landscape fallback, redesigned menu/HUD/results and sound/vibration settings.
+- Original rooftop setting: tiled roofs, water tanks, solar panels, clotheslines and an animated courier. No trains or railway assets.
+- Offline endless runs with swipe/button controls, shields, pause/resume and saved scores/coins.
+- Daily distance/coin/run missions (UTC reset) with claim-once coin rewards.
+- Existing three outfits remain free; two additional outfits unlock with earned coins.
+- Standard/Low scenery detail in Settings.
+- Friend rooms with six-character codes, native invite sharing, seven-day expiry, leaderboards and matching seeded 90-second courses.
+- A cyan replay ghost of the room's highest verified run, when a previous result exists.
+- Server-side physics replay validation, opaque single-use run tickets, bounded requests and persistent room data.
+- Optional rewarded ads to double solo-run coins. Only the SDK's earned-reward event grants a bonus. Challenge scores cannot be boosted by ads.
+- Local counters for finished runs and rewarded requests/completions. These are device-local diagnostics, not a hosted analytics dashboard or revenue reporting.
 
-The scene is original stylized 3D, not photorealistic art or a copy of Subway Surfers assets. Geometry is shared and scenery/coins/windows are instanced to limit rendering overhead. Rendering and simulation tests do not replace performance testing on physical phones.
+This is asynchronous friend competition. Players do not need to be online together. Live 2–4 player racing, public matchmaking, accounts/cloud saves, global weekly leagues, rooftop gap physics and additional biomes are future work.
 
-## Windows setup
+## Run and test
 
-Install Node.js, Android Studio, Android SDK and JDK 21+. Set `ANDROID_HOME` to your SDK folder. The build helper uses Android Studio's bundled JDK when available.
-
-```powershell
-cd "D:\Desi Dash"
+```sh
 npm ci
 npm run typecheck
 npm test
-npm run doctor
-```
-
-Use npm and `package-lock.json`. The native Android folder is checked in and is the build source of truth. Doctor's automatic configuration sync warning is intentionally disabled; after changing `app.json`, apply changes with `npm run android:sync`. EAS builds also consume this checked-in native configuration.
-
-## Build / install
-
-```powershell
+npm run test:social
+npm run test:render
 npm run android:apk
 npm run android:verify
-adb install -r android/app/build/outputs/apk/release/app-release.apk
-adb shell am start -n com.anujpandey.neondash/.MainActivity
 ```
 
-The phone APK contains ARM32 + ARM64 libraries, targets API 36 and requires API 33 (Android 13). It embeds game code and audio: Expo Go, Metro and an internet connection are not needed to play. Version 0.2.1 / code 3 upgrades the previous app and keeps local progress.
+Android builds use JDK 21 (Android Studio's bundled JDK is auto-detected on Windows). `android/local.properties` points at your local SDK and is intentionally ignored. Native Android sources are checked in; retain their version/manifest/ProGuard configuration when changing Expo config. Phone APKs include ARM32 and ARM64, minimum API 33 and target API 36. APKs and caches stay out of Git.
 
-Local release APKs use the generated debug key for internal testing. Configure a private upload key before Play Store distribution. `npm run android:aab` builds the bundle for that workflow. A native rebuild is required after adding `expo-gl`; an old APK cannot run the new 3D scene.
+`npm run preview:3d` opens the shared world in a browser. This verifies shaders and animation; it does not replace testing the native release APK.
 
-For native development: `npm run android`. For an emulator-specific release, set `$env:NEON_ANDROID_ABIS="x86_64"` before building and remove the override before building a phone APK.
+## Friends server
 
-## 3D rendering checks
-
-```powershell
-npm run test:render
+```sh
+npm ci
+npm run server
 ```
 
-This runs the actual shared Three.js world and physics in headless Edge/Chrome at a phone aspect ratio. It checks WebGL/shader errors, lane movement, the animated 3D jump and a rendering budget. It writes screenshots to `_tmp_test/3d-first-frame.png` and `_tmp_test/3d-running.png`. Set `NEON_BROWSER` to your Chrome/Edge executable if the default Windows paths do not apply. This checks the scene; Android GPU/native GL validation remains a separate device test.
+The Node server listens on port 8787. `GET /health` returns its protocol version. Set `PORT` and `CHALLENGE_DATA` to override the port and persistent JSON file location. Keep that data file on a persistent disk; it contains private run tokens and is ignored by Git. The server needs the checked-in physics source and `typescript` from devDependencies, so do not install with `--omit=dev`.
 
-`npm run preview:3d` opens a local developer scene viewer at `http://127.0.0.1:8082`.
+For friends on separate phones, host this service behind an HTTPS reverse proxy. Enter that HTTPS address and your player name in **Friends + Daily Missions** on each phone. Create a room, share the code, join, race, then refresh the room leaderboard. Scores are replayed on the server rather than trusted from a client score field. A failed upload can be retried from the results screen before leaving it. Unsubmitted tickets expire after one hour.
 
-## Code
+No public server is deployed by this repository. The release Android manifest requires HTTPS; plain HTTP LAN URLs will not work in a release build. A debug build permits local HTTP for development. Use a managed HTTPS endpoint or TLS reverse proxy for a phone release test.
 
-- `src/game3d/simulation.ts`: pooled entities, collisions, lane movement, jump/slide, rewards and difficulty.
-- `src/game3d/world.ts`: shared 3D world, original models, materials, camera and animation.
-- `src/game3d/RunnerScene.tsx`: native React Three Fiber rendering and lifecycle.
-- `src/screens/GameScreen.tsx`: gestures, HUD, pause/results and persistence.
+This backend is suitable for small friend playtests. Before a broad public launch, add authenticated player identities, durable database transactions/backups, abuse monitoring and scaled replay workers. Replay validation rejects fabricated scores but is not a complete bot/cheat prevention system. Display names are not verified accounts. Room standings currently list the best 50 attempts, including multiple attempts from one name.
 
-No real advertising or purchase SDK is integrated.
+## Ads setup
 
-## Release startup regression
+The checked-in Android app ID and default rewarded unit are Google's test IDs. Test ads produce **no revenue**. The first voluntary reward request gathers UMP consent before SDK initialization. Ads are never forced during a run. Settings exposes ad privacy options.
 
-v0.2.0 crashed when Expo created the GL view: R8 removed `GLView(Context, AppContext)`, which Expo locates with reflection. Native startup also requires `GLContext.flush()` by JNI name. The targeted `expo.modules.gl.GLView` and `expo.modules.gl.GLContext` keep rules are stored in native ProGuard and in `expo-build-properties.extraProguardRules`. APK verification checks the release mapping for that constructor and JNI callback. Android release launch/Play testing is required in addition to browser rendering tests.
+To enable monetization, replace the test Android app ID in `app.json` (both the config plugin and `react-native-google-mobile-ads` block) and `android/app/src/main/AndroidManifest.xml`. Set `EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID` to your rewarded unit before building. Rebuild the native APK after an app ID change. Configure consent messaging/privacy disclosures and app-ads.txt for your published app in AdMob. Development/testing should continue using test IDs or registered test devices. Actual ad serving and earnings require your AdMob account configuration.
 
-The scene also blocks GL calls synchronously on unmount: native GLView destruction precedes R3F passive cleanup, and rendering/disposal must not call a released JNI context.
+The implementation follows the [Google Mobile Ads integration](https://docs.page/invertase/react-native-google-mobile-ads) and [rewarded ads guide](https://developers.google.com/admob/android/rewarded).
 
+## Native crash regression
 
-Verified v0.2.1 release on the Android 15 emulator: launch, rendered 3D menu, Play/countdown, pause, resume, gameplay/results and return to menu; process remained alive and the native crash buffer stayed empty. The ARM64 APK was run through the emulator's ARM translation (test-only extracted native libraries); a physical Redmi Note 14 Pro+ has not been directly tested. Release signature, SDK levels, bundled JS and 16 KB alignment passed. Fixed APK: artifacts/NeonDash-3D-0.2.1-fixed.apk.
+Preserve the targeted ProGuard rules for `expo.modules.gl.GLView` (reflective constructor) and `expo.modules.gl.GLContext` (JNI `flush()` callback). The APK verifier checks both in the release mapping, plus SDK/version, embedded JS, ARM64 ELF 16 KB alignment and ZIP alignment. The scene synchronously guards native GL calls during unmount so delayed renderer cleanup cannot access an already destroyed GLView.
 
+The previous 0.2.1 APK passed Android 15 emulator launch, rendered menu/gameplay, pause/resume and game-to-menu regression checks. The test emulator required ARM translation; physical Redmi testing is performed by the owner.

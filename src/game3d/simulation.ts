@@ -1,5 +1,5 @@
-﻿export type RunStatus = 'ready' | 'running' | 'paused' | 'gameover';
-export type EntityKind = 'train' | 'barrier' | 'arch' | 'coin' | 'shield';
+export type RunStatus = 'ready' | 'running' | 'paused' | 'gameover';
+export type EntityKind = 'tank' | 'barrier' | 'arch' | 'coin' | 'shield';
 export type RunEvent = 'coin' | 'jump' | 'slide' | 'shield' | 'impact' | 'gameover' | 'milestone';
 export type Entity = { active: boolean; kind: EntityKind; lane: number; z: number; y: number; variant: number };
 export const RUN = { laneWidth: 2.8, step: 1 / 60, gravity: 25, jumpSpeed: 9.5, baseSpeed: 13, maxSpeed: 24, rowGap: 27, drawDistance: 175 } as const;
@@ -7,7 +7,7 @@ export type Runner = {
   status: RunStatus; resumeStatus: 'ready' | 'running'; countdown: number; lane: number; x: number;
   jumpY: number; jumpVelocity: number; slideTime: number; distance: number; speed: number;
   coins: number; score: number; shield: boolean; grace: number; elapsed: number; accumulator: number;
-  nextRow: number; rowNumber: number; seed: number; milestone: number; entities: Entity[]; events: RunEvent[];
+  tick: number; limit: number; nextRow: number; rowNumber: number; seed: number; milestone: number; entities: Entity[]; events: RunEvent[];
 };
 function random(s: Runner) {
   s.seed = (Math.imul(1664525, s.seed) + 1013904223) >>> 0;
@@ -20,11 +20,11 @@ function add(s: Runner, kind: EntityKind, lane: number, z: number, y = 0) {
 function row(s: Runner, z: number) {
   const safeLane = Math.floor(random(s) * 3) - 1;
   const pattern = s.rowNumber < 2 ? 0.5 : random(s);
-  // Entire rows are only jumpable barriers or slideable arches, never three trains.
+  // Entire rows are only jumpable barriers or slideable arches, never three tanks.
   for (let lane = -1; lane <= 1; lane++) {
     if (pattern < 0.16) add(s, 'barrier', lane, z);
     else if (pattern < 0.30) add(s, 'arch', lane, z);
-    else if (lane !== safeLane) add(s, random(s) < 0.62 ? 'train' : 'barrier', lane, z);
+    else if (lane !== safeLane) add(s, random(s) < 0.62 ? 'tank' : 'barrier', lane, z);
   }
   for (let i = 0; i < 7; i++) {
     const y = pattern < 0.16 ? 1.05 + Math.sin(i / 6 * Math.PI) * 1.6 : 1.05;
@@ -33,17 +33,17 @@ function row(s: Runner, z: number) {
   if (s.rowNumber % 7 === 5) add(s, 'shield', safeLane, z + 10, 1.2);
   s.rowNumber++;
 }
-export function createRunner(seed = Date.now()): Runner {
+export function createRunner(seed = Date.now(), limit = 0): Runner {
   const s: Runner = {
     status: 'ready', resumeStatus: 'ready', countdown: 3, lane: 0, x: 0, jumpY: 0, jumpVelocity: 0,
     slideTime: 0, distance: 0, speed: RUN.baseSpeed, coins: 0, score: 0, shield: false, grace: 0,
-    elapsed: 0, accumulator: 0, nextRow: RUN.rowGap, rowNumber: 0, seed: seed >>> 0,
+    elapsed: 0, accumulator: 0, tick: 0, limit, nextRow: RUN.rowGap, rowNumber: 0, seed: seed >>> 0,
     milestone: 500, entities: Array.from({ length: 100 }, () => ({ active: false, kind: 'coin', lane: 0, z: 0, y: 0, variant: 0 })), events: [],
   };
   for (let i = 0; i < 6; i++) row(s, -55 - i * RUN.rowGap);
   return s;
 }
-export function resetRunner(s: Runner, seed = Date.now()) { Object.assign(s, createRunner(seed)); }
+export function resetRunner(s: Runner, seed = Date.now()) { Object.assign(s, createRunner(seed, s.limit)); }
 export function steer(s: Runner, direction: -1 | 1) {
   if (s.status === 'running') s.lane = Math.max(-1, Math.min(1, s.lane + direction));
 }
@@ -69,6 +69,7 @@ export function snapshot(s: Runner) {
 export type RunSnapshot = ReturnType<typeof snapshot>;
 function step(s: Runner) {
   const dt = RUN.step;
+  s.tick++;
   if (s.status === 'ready') {
     s.countdown = Math.max(0, s.countdown - dt);
     if (s.countdown <= 0) s.status = 'running';
@@ -96,15 +97,16 @@ function step(s: Runner) {
       }
       continue;
     }
-    const halfLength = e.kind === 'train' ? 4.8 : 0.65;
+    const halfLength = e.kind === 'tank' ? 4.8 : 0.65;
     if (across > 1.02 || Math.abs(e.z) > halfLength + 0.28 || s.grace > 0) continue;
-    const hit = e.kind === 'train' || (e.kind === 'barrier' ? s.jumpY < 1.0 : s.jumpY + (s.slideTime > 0 ? 0.75 : 1.85) > 1.28);
+    const hit = e.kind === 'tank' || (e.kind === 'barrier' ? s.jumpY < 1.0 : s.jumpY + (s.slideTime > 0 ? 0.75 : 1.85) > 1.28);
     if (hit) {
       s.events.push('impact');
       if (s.shield) { s.shield = false; s.grace = 1.4; e.active = false; }
       else { s.status = 'gameover'; s.events.push('gameover'); break; }
     }
   }
+  if (s.limit > 0 && s.elapsed >= s.limit && s.status === 'running') { s.status = 'gameover'; s.events.push('gameover'); }
   s.score = Math.floor(s.distance * 10) + s.coins * 50;
   if (s.distance >= s.milestone) { s.milestone += 500; s.events.push('milestone'); }
   if (s.distance >= s.nextRow) { row(s, -55 - 5 * RUN.rowGap); s.nextRow += RUN.rowGap; }

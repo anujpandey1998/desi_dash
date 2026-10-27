@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, BackHandler, Image, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -8,9 +8,18 @@ import { loadOutfit } from '../game3d/profile';
 import { loadHighScore, loadRunnerPhoto, loadWalletCoins, saveHighScore, saveWalletCoins } from '../services/runnerPhotoService';
 import { loadVibrationSetting, loadSoundSetting, pauseMusic, playButtonTap, playCoin, playCrash, playJump, resumeAudioIfNeeded, triggerImpact } from '../services/audioService';
 
-export function GameScreen({ navigation }: { navigation: any }) {
+import { type InputAction, type RunInput, type Ticket } from '../game3d/challenges';
+import { localTransaction, saveCompletedRun, startChallenge, submitChallenge, trackEvent } from '../services/socialService';
+import { showCoinReward, TEST_ADS } from '../services/adService';
+
+export function GameScreen({ navigation, route }: { navigation: any; route: any }) {
   const insets = useSafeAreaInsets();
-  const runner = useMemo(() => createRunner(), []);
+  const ticket = useRef<Ticket | undefined>(route?.params?.ticket);
+  const inputs = useRef<RunInput[]>([]);
+  const submitted = useRef(false), uploading = useRef(false), adLock = useRef(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const [adBusy, setAdBusy] = useState(false), [doubled, setDoubled] = useState(false);
+  const runner = useMemo(() => createRunner(ticket.current?.challenge.seed, ticket.current?.challenge.limit || 0), []);
   const [hud, setHud] = useState(() => snapshot(runner));
   const [ready, setReady] = useState(false);
   const [renderError, setRenderError] = useState(false);
@@ -34,12 +43,10 @@ export function GameScreen({ navigation }: { navigation: any }) {
     if (banked.current) return Promise.resolve();
     const finalScore = runner.score, collected = runner.coins;
     setSaving(true);
-    saveTask.current = (async () => {
-      const [oldBest, oldWallet] = await Promise.all([loadHighScore(), loadWalletCoins()]);
-      const nextBest = Math.max(oldBest, finalScore), nextWallet = oldWallet + collected;
-      await Promise.all([saveHighScore(nextBest), saveWalletCoins(nextWallet)]);
-      setBest(nextBest); setWallet(nextWallet); banked.current = true;
-    })().catch(() => { showNotice('Progress could not be saved. Try again.'); }).finally(() => { setSaving(false); saveTask.current = null; });
+    saveTask.current = localTransaction(async () => {
+      const saved = await saveCompletedRun(finalScore, runner.distance, collected, runner.status === 'gameover');
+      setBest(saved.best); setWallet(saved.wallet); banked.current = true;
+    }).catch(() => { showNotice('Progress could not be saved. Try again.'); }).finally(() => { setSaving(false); saveTask.current = null; });
     return saveTask.current;
   }, [runner, showNotice]);
   useEffect(() => {
@@ -52,7 +59,7 @@ export function GameScreen({ navigation }: { navigation: any }) {
     return () => { if (noticeTimer.current) clearTimeout(noticeTimer.current); void pauseMusic().catch(() => {}); };
   }, []);
   const goHome = useCallback(async () => {
-    if (leaving.current) return;
+    if (leaving.current || adLock.current) return;
     leaving.current = true; pause(runner); await bank();
     if (banked.current) navigation.goBack(); else leaving.current = false;
   }, [runner, bank, navigation]);
@@ -71,29 +78,57 @@ export function GameScreen({ navigation }: { navigation: any }) {
     });
     return () => { app.remove(); back.remove(); };
   }, [runner, togglePause, goHome]);
+  const upload = useCallback(async () => {
+    if (!ticket.current || submitted.current || uploading.current) return;
+    uploading.current = true;
+    setUploadStatus('Verifying your run...');
+    try { await submitChallenge(ticket.current, runner.tick, inputs.current); submitted.current = true; setUploadStatus('Verified score posted! Refresh your room leaderboard.'); }
+    catch { setUploadStatus('Score upload failed. Tap RETRY UPLOAD before leaving.'); }
+    finally { uploading.current = false; }
+  }, [runner]);
+  const input = useCallback((action: InputAction) => {
+    if (runner.status !== 'running') return;
+    if (ticket.current) inputs.current.push({ tick: runner.tick, action });
+    if (action === 'jump') jump(runner); else if (action === 'slide') slide(runner); else steer(runner, action === 'left' ? -1 : 1);
+  }, [runner]);
+  const doubleCoins = async () => {
+    if (adLock.current || adBusy || doubled || ticket.current || runner.coins < 1) return;
+    adLock.current = true;
+    setAdBusy(true);
+    try {
+      await bank(); if (!banked.current) return;
+      const earned = await showCoinReward();
+      if (!earned) { showNotice('No reward earned. Ad unavailable or closed early.'); return; }
+      await localTransaction(async () => { const next = await loadWalletCoins() + runner.coins; await saveWalletCoins(next); setWallet(next); });
+      setDoubled(true); showNotice('BONUS COINS ADDED');
+    } catch { showNotice('Reward could not be saved.'); } finally { adLock.current = false; setAdBusy(false); }
+  };
   const onEvent = useCallback((event: RunEvent) => {
     if (event === 'jump') void playJump().catch(() => {});
     if (event === 'coin' && Date.now() - lastCoinSound.current > 80) { lastCoinSound.current = Date.now(); void playCoin().catch(() => {}); }
     if (event === 'shield') showNotice('SHIELD READY');
     if (event === 'milestone') showNotice(`${runner.milestone - 500} m CHECKPOINT`);
     if (event === 'impact') { void triggerImpact().catch(() => {}); if (runner.status !== 'gameover') showNotice('SHIELD SAVED YOU'); }
-    if (event === 'gameover') { void playCrash().catch(() => {}); void pauseMusic().catch(() => {}); setHud(snapshot(runner)); void bank(); }
-  }, [runner, bank, showNotice]);
+    if (event === 'gameover') { void playCrash().catch(() => {}); void pauseMusic().catch(() => {}); setHud(snapshot(runner)); void bank(); void upload(); void trackEvent('runs_finished').catch(() => {}); }
+  }, [runner, bank, showNotice, upload]);
   const handled = useRef(false);
   const applySwipe = useCallback((dx: number, dy: number) => {
-    if (Math.abs(dx) > Math.abs(dy)) steer(runner, dx < 0 ? -1 : 1);
-    else if (dy < 0) jump(runner); else slide(runner);
-  }, [runner]);
+    if (Math.abs(dx) > Math.abs(dy)) input(dx < 0 ? 'left' : 'right');
+    else if (dy < 0) input('jump'); else input('slide');
+  }, [input]);
   const gesture = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => runner.status === 'running',
     onMoveShouldSetPanResponder: () => runner.status === 'running',
     onPanResponderGrant: () => { handled.current = false; },
     onPanResponderMove: (_, g) => { if (!handled.current && Math.max(Math.abs(g.dx), Math.abs(g.dy)) > 32) { applySwipe(g.dx, g.dy); handled.current = true; } },
-    onPanResponderRelease: (_, g) => { if (!handled.current) { if (Math.max(Math.abs(g.dx), Math.abs(g.dy)) < 14) jump(runner); else applySwipe(g.dx, g.dy); } },
-  }), [runner, applySwipe]);
+    onPanResponderRelease: (_, g) => { if (!handled.current) { if (Math.max(Math.abs(g.dx), Math.abs(g.dy)) < 14) input('jump'); else applySwipe(g.dx, g.dy); } },
+  }), [runner, applySwipe, input]);
   const retry = async () => {
+    if (adLock.current || uploading.current) return;
     await bank(); if (!banked.current) return;
-    banked.current = false; resetRunner(runner); setHud(snapshot(runner)); setNotice('');
+    if (ticket.current) { try { ticket.current = await startChallenge(ticket.current.challenge.code); } catch { showNotice('Cannot start challenge. Check your connection.'); return; } }
+    inputs.current = []; submitted.current = false; setUploadStatus(''); setDoubled(false);
+    banked.current = false; resetRunner(runner, ticket.current?.challenge.seed); setHud(snapshot(runner)); setNotice('');
     void playButtonTap().catch(() => {}); void resumeAudioIfNeeded().catch(() => {});
   };
   const onReady = useCallback(() => setReady(true), []);
@@ -101,7 +136,7 @@ export function GameScreen({ navigation }: { navigation: any }) {
   const progress = Math.min(100, hud.distance % 500 / 5);
   return <View style={styles.root}>
     <StatusBar hidden />
-    <RunnerScene runner={runner} outfit={outfit} onSnapshot={setHud} onEvent={onEvent} onReady={onReady} onError={onError} />
+    <RunnerScene runner={runner} ghost={ticket.current?.ghost} outfit={outfit} onSnapshot={setHud} onEvent={onEvent} onReady={onReady} onError={onError} />
     <View style={StyleSheet.absoluteFill} {...gesture.panHandlers} />
     <View pointerEvents="box-none" style={[styles.hud, { top: insets.top + 12, left: insets.left + 18, right: insets.right + 18 }]}>
       <View style={styles.topRow}>
@@ -111,16 +146,16 @@ export function GameScreen({ navigation }: { navigation: any }) {
       </View>
       <View pointerEvents="none" style={styles.metrics}><Text style={styles.metric}>{hud.distance} m</Text><Text style={styles.metric}>{hud.shield ? 'SHIELD ON' : `${hud.speed} km/h`}</Text></View>
       <View pointerEvents="none" style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View>
-      <Text pointerEvents="none" style={styles.target}>NEXT CHECKPOINT  {hud.milestone} m</Text>
+      <Text pointerEvents="none" style={styles.target}>{ticket.current ? 'FRIEND RACE ? ' + Math.max(0, Math.ceil(90 - runner.elapsed)) + 's LEFT' : 'NEXT DELIVERY  ' + hud.milestone + ' m'}</Text>
     </View>
     {!!notice && <View pointerEvents="none" style={[styles.notice, { top: insets.top + 155 }]}><Text style={styles.noticeText}>{notice}</Text></View>}
     {hud.status === 'running' && <View style={[styles.controls, { bottom: Math.max(insets.bottom, 12) + 12 }]}>
-      {(['left', 'jump', 'slide', 'right'] as const).map((action, i) => <Pressable key={action} accessibilityLabel={action} onPress={() => action === 'left' ? steer(runner, -1) : action === 'right' ? steer(runner, 1) : action === 'jump' ? jump(runner) : slide(runner)} style={({ pressed }) => [styles.control, pressed && styles.controlPressed]}><Text style={styles.controlIcon}>{['‹', '↑', '↓', '›'][i]}</Text><Text style={styles.controlLabel}>{action.toUpperCase()}</Text></Pressable>)}
+      {(['left', 'jump', 'slide', 'right'] as const).map((action, i) => <Pressable key={action} accessibilityLabel={action} onPress={() => input(action)} style={({ pressed }) => [styles.control, pressed && styles.controlPressed]}><Text style={styles.controlIcon}>{['‹', '↑', '↓', '›'][i]}</Text><Text style={styles.controlLabel}>{action.toUpperCase()}</Text></Pressable>)}
     </View>}
     {!ready && !renderError && <View style={styles.veil}><ActivityIndicator color="#f1bd5b" size="large" /><Text style={styles.loading}>Preparing the city...</Text></View>}
     {ready && hud.status === 'ready' && <View pointerEvents="none" style={styles.countdown}><Text style={styles.eyebrow}>YOUR RUN STARTS IN</Text><Text style={styles.count}>{hud.countdown || 'GO'}</Text><Text style={styles.instructions}>Swipe to change lanes · Up to jump · Down to slide</Text></View>}
-    {hud.status === 'paused' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>TAKE A BREATHER</Text><Text style={styles.title}>Run paused.</Text><Text style={styles.description}>The city will wait for you.</Text><Pressable style={styles.primary} onPress={togglePause}><Text style={styles.primaryText}>CONTINUE RUN</Text></Pressable><Pressable style={styles.secondary} disabled={saving} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
-    {hud.status === 'gameover' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>UNTIL THE NEXT RUN</Text><Text style={styles.title}>What a ride.</Text><View style={styles.resultRow}><View><Text style={styles.small}>FINAL SCORE</Text><Text style={styles.resultScore}>{hud.score.toLocaleString()}</Text></View><View><Text style={styles.small}>DISTANCE</Text><Text style={styles.resultDistance}>{hud.distance} m</Text></View></View><Text style={styles.description}>Best {Math.max(best, hud.score).toLocaleString()}   ·   +{hud.coins} coins   ·   Wallet {wallet}</Text><Pressable disabled={saving} style={styles.primary} onPress={() => void retry()}><Text style={styles.primaryText}>{saving ? 'SAVING RUN...' : 'RUN AGAIN'}</Text></Pressable><Pressable disabled={saving} style={styles.secondary} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
+    {hud.status === 'paused' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>TAKE A BREATHER</Text><Text style={styles.title}>Run paused.</Text><Text style={styles.description}>The city will wait for you.</Text><Pressable style={styles.primary} onPress={togglePause}><Text style={styles.primaryText}>CONTINUE RUN</Text></Pressable><Pressable style={styles.secondary} disabled={saving || adBusy} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
+    {hud.status === 'gameover' && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.eyebrow}>UNTIL THE NEXT RUN</Text><Text style={styles.title}>What a run.</Text><View style={styles.resultRow}><View><Text style={styles.small}>FINAL SCORE</Text><Text style={styles.resultScore}>{hud.score.toLocaleString()}</Text></View><View><Text style={styles.small}>DISTANCE</Text><Text style={styles.resultDistance}>{hud.distance} m</Text></View></View><Text style={styles.description}>Best {Math.max(best, hud.score).toLocaleString()}   ·   +{hud.coins} coins   ·   Wallet {wallet}</Text>{!!ticket.current && <><Text style={styles.description}>{uploadStatus}</Text>{!submitted.current && <Pressable style={styles.secondary} onPress={() => void upload()}><Text style={styles.secondaryText}>RETRY UPLOAD</Text></Pressable>}</>}{!ticket.current && hud.coins > 0 && <Pressable disabled={saving || adBusy || doubled} style={[styles.secondary, { paddingBottom: 20 }]} onPress={() => void doubleCoins()}><Text style={styles.secondaryText}>{doubled ? 'BONUS CLAIMED' : adBusy ? 'LOADING AD...' : 'WATCH ' + (TEST_ADS ? 'TEST ' : '') + 'AD - DOUBLE COINS'}</Text></Pressable>}<Pressable disabled={saving || adBusy} style={styles.primary} onPress={() => void retry()}><Text style={styles.primaryText}>{saving ? 'SAVING RUN...' : 'RUN AGAIN'}</Text></Pressable><Pressable disabled={saving} style={styles.secondary} onPress={() => void goHome()}><Text style={styles.secondaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
     {renderError && <View style={styles.veil}><ScrollView style={styles.card} contentContainerStyle={{ padding: 27 }}><Text style={styles.title}>3D could not start.</Text><Text style={styles.description}>Close and reopen the updated APK. The game needs a working OpenGL graphics context.</Text><Pressable style={styles.primary} onPress={() => navigation.goBack()}><Text style={styles.primaryText}>BACK TO CITY</Text></Pressable></ScrollView></View>}
   </View>;
 }

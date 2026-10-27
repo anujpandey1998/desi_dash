@@ -10,6 +10,8 @@ import { SplashScreen } from './src/screens/SplashScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { CustomizeScreen } from './src/screens/CustomizeScreen';
 
+import { ChallengesScreen } from './src/screens/ChallengesScreen';
+
 const Stack = createStackNavigator();
 
 export default function App() {
@@ -21,6 +23,7 @@ export default function App() {
           <Stack.Screen name="Splash" component={SplashScreen} />
           <Stack.Screen name="MainMenu" component={MainMenuScreen} />
           <Stack.Screen name="Game" component={GameScreen} />
+          <Stack.Screen name="Challenges" component={ChallengesScreen} />
           <Stack.Screen name="Customize" component={CustomizeScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
