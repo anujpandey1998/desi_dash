@@ -14,3 +14,4 @@ android/local.properties
 
 server/data.json
 server/data.json.tmp
+android/.kotlin/
