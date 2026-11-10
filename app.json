@@ -33,18 +33,20 @@
           "delayAppMeasurementInit": true
         }
       ],
-      "./plugins/withGameGraphics.cjs"
+      "./plugins/withGameGraphics.cjs",
+      "./plugins/withFirebaseAndroid.cjs"
     ],
     "android": {
       "package": "com.anujpandey.neondash",
-      "versionCode": 4,
+      "versionCode": 5,
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW"
       ]
-    }
+    },
+    "icon": "./src/assets/branding/app-icon.png"
   },
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-3940256099942544~3347511713"

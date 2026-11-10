@@ -1,27 +1,34 @@
+﻿import { AccountCard } from './auth/AccountCard';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { MenuLayout } from '../components/MenuLayout';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { MascotAvatar } from '../components/BrandMascot';
+import { Button, Card } from '../components/ui';
+import { theme as t } from '../theme/theme';
 import { loadSoundSetting, loadVibrationSetting, setSoundEnabled, setVibrationEnabled } from '../services/audioService';
 import { showAdsPrivacyOptions, TEST_ADS } from '../services/adService';
 import { loadGraphicsQuality, saveGraphicsQuality } from '../game3d/profile';
-import { Alert } from 'react-native';
+
 export function SettingsScreen({ navigation }: { navigation: any }) {
   const [quality, setQuality] = useState<'low' | 'standard'>('standard');
-  useEffect(() => { loadGraphicsQuality().then(setQuality).catch(() => {}); }, []);
   const [sound, setSound] = useState(true), [vibration, setVibration] = useState(true);
-  useEffect(() => { loadSoundSetting().then(setSound).catch(() => {}); loadVibrationSetting().then(setVibration).catch(() => {}); }, []);
-  return <MenuLayout style={styles.root}>
-    <Text style={styles.eyebrow}>MAKE IT YOURS</Text><Text style={styles.title}>Settings.</Text>
-    <View style={styles.row}><View><Text style={styles.label}>City sounds</Text><Text style={styles.hint}>Music and game effects</Text></View><Pressable accessibilityLabel="Toggle sound" style={[styles.toggle, sound && styles.enabled]} onPress={() => { setSound(!sound); void setSoundEnabled(!sound).catch(() => {}); }}><Text style={styles.toggleText}>{sound ? 'ON' : 'OFF'}</Text></Pressable></View>
-    <View style={styles.row}><View><Text style={styles.label}>Vibration</Text><Text style={styles.hint}>Feel collisions and impacts</Text></View><Pressable accessibilityLabel="Toggle vibration" style={[styles.toggle, vibration && styles.enabled]} onPress={() => { setVibration(!vibration); void setVibrationEnabled(!vibration).catch(() => {}); }}><Text style={styles.toggleText}>{vibration ? 'ON' : 'OFF'}</Text></Pressable></View>
-    <View style={styles.row}><View><Text style={styles.label}>Graphics detail</Text><Text style={styles.hint}>Low draws less distant scenery</Text></View><Pressable style={styles.toggle} onPress={() => { const next = quality === 'low' ? 'standard' : 'low'; setQuality(next); void saveGraphicsQuality(next).catch(() => {}); }}><Text style={styles.toggleText}>{quality.toUpperCase()}</Text></Pressable></View><Pressable style={styles.row} onPress={() => void showAdsPrivacyOptions().catch(() => Alert.alert('Ad privacy', 'Privacy options are unavailable or not required in your region.'))}><View><Text style={styles.label}>Ad privacy choices</Text><Text style={styles.hint}>{TEST_ADS ? 'Test ads enabled - no real earnings' : 'Manage your advertising privacy'}</Text></View></Pressable><View style={styles.guide}><Text style={styles.guideTitle}>OWN THE ROOFTOPS</Text><Text style={styles.guideText}>Swipe left / right to change lanes.{ '\n' }Swipe up or tap to jump barriers.{ '\n' }Swipe down to slide under clotheslines.{ '\n' }Dodge water tanks. Collect coins and blue shields.{ '\n\n' }Use the on-screen buttons if you prefer. A shield absorbs one crash. Your run pauses automatically when you leave the app.</Text></View>
-    <Pressable style={styles.back} onPress={() => navigation.goBack()}><Text style={styles.backText}>BACK TO CITY</Text></Pressable>
+  useEffect(() => { loadGraphicsQuality().then(setQuality).catch(() => {}); loadSoundSetting().then(setSound).catch(() => {}); loadVibrationSetting().then(setVibration).catch(() => {}); }, []);
+  return <MenuLayout>
+    <ScreenHeader title="Settings" subtitle="Your rush, your rules." onBack={() => navigation.goBack()} />
+    <AccountCard/>
+    <Card light style={s.intro}><MascotAvatar size={64} /><View style={{ flex: 1 }}><Text style={s.introTitle}>Make yourself at home.</Text><Text style={s.introCopy}>Little tweaks for your perfect run.</Text></View></Card>
+    <Card style={s.stack}>
+      <View style={s.row}><View style={s.rowCopy}><Text style={s.label}>♫  City sounds</Text><Text style={s.hint}>Music & game effects</Text></View><Switch accessibilityLabel="City sounds" value={sound} trackColor={{ false: t.colors.outline, true: t.colors.blue }} thumbColor="#FFF" onValueChange={value => { setSound(value); void setSoundEnabled(value).catch(() => {}); }} /></View>
+      <View style={s.divider} />
+      <View style={s.row}><View style={s.rowCopy}><Text style={s.label}>✦  Haptic feedback</Text><Text style={s.hint}>Feel the little moments</Text></View><Switch accessibilityLabel="Vibration" value={vibration} trackColor={{ false: t.colors.outline, true: t.colors.blue }} thumbColor="#FFF" onValueChange={value => { setVibration(value); void setVibrationEnabled(value).catch(() => {}); }} /></View>
+    </Card>
+    <Card style={s.stack}><Text style={s.label}>Scenery detail</Text><Text style={s.hint}>Low uses less distant scenery and turns off shadows.</Text><View style={s.qualityRow}>{(['standard','low'] as const).map(value => <Button key={value} title={(value === 'standard' ? 'Standard' : 'Low') + (quality === value ? ' ✓' : '')} compact tone={quality === value ? 'blue' : 'panel'} style={{ flex: 1 }} accessibilityLabel={`${value} graphics, ${quality === value ? 'selected' : 'not selected'}`} onPress={() => { setQuality(value); void saveGraphicsQuality(value).catch(() => {}); }} />)}</View></Card>
+    <Card style={s.stack}><Text style={s.label}>Privacy & ads</Text><Text style={s.hint}>{TEST_ADS ? 'Test ads are enabled in this build.' : 'You choose your ad privacy preferences.'}</Text><Button title="Ad privacy choices" compact tone="panel" onPress={() => void showAdsPrivacyOptions().catch(() => Alert.alert('Ad privacy', 'Privacy options are unavailable or not required in your region.'))} /></Card>
+    <Card style={s.stack}><Text style={s.label}>A quick rooftop refresher</Text>{[['↔','Swipe left or right','Change lanes'],['↑','Swipe up','Jump over barriers'],['↓','Swipe down','Slide under low gates'],['✦','Grab a blue shield','Absorb one crash']].map(([icon,title,hint]) => <View key={title} style={s.guideRow}><Text style={s.gesture}>{icon}</Text><View style={s.rowCopy}><Text style={s.guideTitle}>{title}</Text><Text style={s.hint}>{hint}</Text></View></View>)}<Text style={s.hint}>Dodge water tanks. Your run pauses when you leave the app.</Text></Card>
+    <Button title="Back to the rooftops" tone="green" onPress={() => navigation.goBack()} />
   </MenuLayout>;
 }
-const styles=StyleSheet.create({
-  root:{padding:25,paddingTop:38},eyebrow:{color:'#ddb268',fontSize:10,letterSpacing:2.5,fontWeight:'900'},title:{color:'#fff3dc',fontSize:40,fontWeight:'900',marginTop:10,marginBottom:30},
-  row:{backgroundColor:'#193a47',padding:18,borderRadius:18,marginBottom:14,flexDirection:'row',alignItems:'center',justifyContent:'space-between'},label:{color:'#e7eeE4',fontSize:16,fontWeight:'800'},hint:{color:'#8bacb6',fontSize:11,marginTop:5},
-  toggle:{paddingVertical:11,paddingHorizontal:17,borderRadius:12,backgroundColor:'#61727a'},enabled:{backgroundColor:'#e6b45c'},toggleText:{color:'#152e3b',fontSize:11,fontWeight:'900'},
-  guide:{padding:22,borderWidth:1,borderColor:'#31525c',borderRadius:20,marginTop:16},guideTitle:{color:'#efc677',fontSize:11,fontWeight:'900',letterSpacing:2},guideText:{color:'#a4c0c8',lineHeight:26,fontSize:12,marginTop:14},
-  back:{backgroundColor:'#e8b65e',borderRadius:15,alignItems:'center',padding:18,marginTop:28},backText:{color:'#17313c',fontSize:12,letterSpacing:1.5,fontWeight:'900'},
+const s=StyleSheet.create({
+  intro: { flexDirection: 'row', alignItems: 'center', gap: 14 }, introTitle: { color: t.colors.ink, fontFamily: t.font.bold, fontWeight: '900', fontSize: 20 }, introCopy: { color: '#526B8D', fontFamily: t.font.regular, fontSize: 12, marginTop: 4 }, stack: { gap: 12 }, row: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'space-between' }, rowCopy: { flex: 1 }, label: { color: t.colors.text, fontFamily: t.font.bold, fontSize: 18, fontWeight: '900' }, hint: { color: t.colors.muted, fontFamily: t.font.regular, fontSize: 12, lineHeight: 19, marginTop: 3 }, divider: { height: 1, backgroundColor: t.colors.outline }, qualityRow: { flexDirection: 'row', gap: 12 }, guideRow: { flexDirection: 'row', alignItems: 'center', gap: 12 }, gesture: { color: t.colors.gold, fontSize: 24, textAlign: 'center', width: 36 }, guideTitle: { color: t.colors.text, fontFamily: t.font.bold, fontWeight: '800', fontSize: 14 },
 });

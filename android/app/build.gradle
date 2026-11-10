@@ -2,6 +2,26 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// MANUAL: Download Firebase Android config for this exact applicationId.
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}
+def releaseSetting = { key -> System.getenv(key) ?: findProperty(key) }
+def releaseStorePath = releaseSetting('ROOFTOP_UPLOAD_STORE_FILE')
+def releaseStorePassword = releaseSetting('ROOFTOP_UPLOAD_STORE_PASSWORD')
+def releaseKeyAlias = releaseSetting('ROOFTOP_UPLOAD_KEY_ALIAS')
+def releaseKeyPassword = releaseSetting('ROOFTOP_UPLOAD_KEY_PASSWORD')
+def releaseSigningReady = releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+def allowTestRelease = releaseSetting('ROOFTOP_ALLOW_TEST_RELEASE') == 'true'
+
+gradle.taskGraph.whenReady { graph ->
+    def releaseRequested = graph.allTasks.any { it.project == project && (it.name == 'assembleRelease' || it.name == 'bundleRelease') }
+    if (releaseRequested && !allowTestRelease) {
+        if (!releaseSigningReady) throw new GradleException('MANUAL: Set ROOFTOP_UPLOAD_* signing values outside the repository. See docs/FIREBASE_SETUP.md.')
+        if (!file('google-services.json').exists()) throw new GradleException('MANUAL: Add android/app/google-services.json before a production release.')
+    }
+}
+
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**
@@ -89,6 +109,7 @@ android {
 
     namespace 'com.anujpandey.neondash'
     defaultConfig {
+        buildConfigField "boolean", "FIREBASE_CONFIGURED", file("google-services.json").exists().toString()
         externalNativeBuild {
             cmake {
                 arguments "-DCMAKE_OBJECT_PATH_MAX=240"
@@ -97,12 +118,20 @@ android {
         applicationId 'com.anujpandey.neondash'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
+        versionCode 5
         versionName "0.3.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
+        release {
+            if (releaseSigningReady) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
         debug {
             storeFile file('debug.keystore')
             storePassword 'android'
@@ -115,9 +144,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig releaseSigningReady ? signingConfigs.release : (allowTestRelease ? signingConfigs.debug : null)
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

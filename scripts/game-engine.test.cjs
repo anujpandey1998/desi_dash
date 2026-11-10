@@ -3,7 +3,7 @@ const { test }=require('node:test'),assert=require('node:assert/strict');
 const exports3d={};
 vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/game3d/simulation.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports:exports3d,Math,Date,Number,Object,Array});
 const {createRunner,advanceRunner,jump,slide,steer,pause,resume,resetRunner,RUN}=exports3d;
-function running(){const s=createRunner(42);s.status='running';for(const e of s.entities)e.active=false;return s;}
+function running(){const s=createRunner(42,90);s.status='running';for(const e of s.entities)e.active=false;return s;}
 function tick(s,seconds,hz=60){for(let i=0;i<Math.round(seconds*hz);i++)advanceRunner(s,1/hz);}
 function obstacle(s,kind,z=-0.8,lane=0){Object.assign(s.entities[0],{active:true,kind,lane,z,y:0});}
 test('60 and 120 Hz produce the same distance and score',()=>{const a=running(),b=running();tick(a,1,60);tick(b,1,120);assert.ok(Math.abs(a.distance-b.distance)<1e-6);assert.equal(a.score,b.score);});

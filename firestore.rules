@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function own(uid) { return signedIn() && request.auth.uid == uid; }
+    function validName(name) { return name is string && name.size() >= 1 && name.size() <= 20; }
+    function score(value) { return value is int && value >= 0 && value <= 10000000; }
+    function avatar(value) { return value in ['boy', 'girl']; }
+    match /users/{uid} {
+      allow get: if own(uid);
+      allow list, delete: if false;
+      allow create: if own(uid)
+        && request.resource.data.keys().hasAll(['displayName','avatarId','coins','highScore','createdAt'])
+        && request.resource.data.keys().hasOnly(['displayName','avatarId','coins','highScore','createdAt'])
+        && validName(request.resource.data.displayName) && avatar(request.resource.data.avatarId)
+        && request.resource.data.coins == 0 && request.resource.data.highScore == 0
+        && request.resource.data.createdAt == request.time;
+      allow update: if own(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','avatarId','highScore'])
+        && validName(request.resource.data.displayName) && avatar(request.resource.data.avatarId)
+        && score(request.resource.data.highScore) && request.resource.data.highScore >= resource.data.highScore;
+    }
+    match /rooms/{roomId} {
+      function member() { return signedIn() && request.auth.uid in resource.data.players; }
+      function validOwnProgress() {
+        let uid = request.auth.uid;
+        let before = resource.data.players[uid];
+        let after = request.resource.data.players[uid];
+        let changed = after.diff(before).affectedKeys();
+        return !before.left
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['players'])
+          && request.resource.data.players.diff(resource.data.players).affectedKeys().hasOnly([uid])
+          && after.keys().hasAll(['name','score','distance','finished','left','lastSeen'])
+          && after.keys().hasOnly(['name','score','distance','finished','left','lastSeen'])
+          && after.name == before.name && after.left == before.left
+          && after.lastSeen == request.time && after.finished is bool
+          && score(after.score) && after.score >= before.score
+          && after.distance is int && after.distance >= before.distance && after.distance <= 5000
+          && (changed.hasOnly(['lastSeen']) || (
+            resource.data.status == 'playing' && !before.finished
+            && request.time.toMillis() >= resource.data.startsAt
+            && request.time.toMillis() <= resource.data.startsAt + (resource.data.duration + 15) * 1000
+            && changed.hasOnly(['score','distance','finished','lastSeen'])
+          ));
+      }
+      allow get: if member();
+      allow list, create, delete: if false;
+      // Membership and host-only start/replay use App Check protected callable transactions.
+      allow update: if member() && validOwnProgress();
+    }
+    // Private code index + membership index. Only trusted Admin SDK functions may access these.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

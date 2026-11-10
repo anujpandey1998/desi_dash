@@ -1,5 +1,5 @@
-export const INTERSTITIAL_RUN_INTERVAL = 4;
-export const INTERSTITIAL_COOLDOWN_MS = 180000;
+export const INTERSTITIAL_RUN_INTERVAL = 3;
+export const INTERSTITIAL_COOLDOWN_MS = 0;
 
 export function isInterstitialDue(completedRuns: number, lastShownRun: number, lastShownAt: number, now: number) {
   return completedRuns - lastShownRun >= INTERSTITIAL_RUN_INTERVAL

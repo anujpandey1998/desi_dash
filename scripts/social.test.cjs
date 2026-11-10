@@ -31,17 +31,19 @@ test('daily rewards are claim-once and concurrent claims cannot duplicate coins'
  await assert.rejects(service.claimMission('distance'));
  const claimed=await Promise.allSettled([service.claimMission('coins'),service.claimMission('coins')]);assert.equal(claimed.filter(r=>r.status==='fulfilled').length,1);assert.equal(await storage.getItem('neon-dash.wallet-coins.v1'),'140');
  const progress=await service.loadMissions();assert.equal(progress.runs,2);assert.equal(progress.distance,600);assert.equal(progress.claimed.length,1);
+ await service.localTransaction(()=>service.saveCompletedRun(250,800,7,true,false));
+ const continued=await service.loadMissions();assert.equal(continued.runs,2);assert.equal(continued.distance,800);assert.equal(continued.coins,47);assert.equal(await storage.getItem('neon-dash.wallet-coins.v1'),'147');
  assert.equal(challenges.missionDay(new Date('2026-10-27T23:59:59Z')),'2026-10-27');
 });
 
-test('interstitial policy requires four more solo runs and a three-minute cooldown',()=>{
+test('interstitial policy requires three more solo games and skips duplicates',()=>{
  const fs=require('fs'),vm=require('vm'),ts=require('typescript'),exports={};
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/services/adPolicy.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,Math,Date,Number,Object,Array});
- assert.equal(exports.isInterstitialDue(3,0,0,1000000),false);
- assert.equal(exports.isInterstitialDue(4,0,820001,1000000),false);
- assert.equal(exports.isInterstitialDue(4,0,820000,1000000),true);
- assert.equal(exports.isInterstitialDue(7,4,0,1000000),false);
- assert.equal(exports.isInterstitialDue(8,4,0,1000000),true);
+ assert.equal(exports.isInterstitialDue(2,0,0,1000000),false);
+ assert.equal(exports.isInterstitialDue(3,0,999999,1000000),true);
+ assert.equal(exports.isInterstitialDue(3,3,999999,1000000),false);
+ assert.equal(exports.isInterstitialDue(5,3,0,1000000),false);
+ assert.equal(exports.isInterstitialDue(6,3,0,1000000),true);
 });
 
 test('room seed and league survive a server restart',async()=>{

@@ -21,6 +21,16 @@ class MainApplication : Application(), ReactApplication {
       context = applicationContext,
       packageList =
         PackageList(this).packages.apply {
+          // Optional native services require a real default Firebase app before eager TurboModule init.
+          if (!BuildConfig.FIREBASE_CONFIGURED) {
+            removeAll { reactPackage ->
+              reactPackage is io.invertase.firebase.appcheck.ReactNativeFirebaseAppCheckPackage ||
+              reactPackage is io.invertase.firebase.auth.ReactNativeFirebaseAuthPackage ||
+              reactPackage is io.invertase.firebase.firestore.ReactNativeFirebaseFirestorePackage ||
+              reactPackage is io.invertase.firebase.functions.NativeFunctionsPackage
+            }
+          }
+
           // Packages that cannot be autolinked yet can be added manually here, for example:
           // add(MyReactNativePackage())
         }

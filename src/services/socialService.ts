@@ -38,9 +38,9 @@ export async function trackEvent(event: string, value = 1) {
   return localTransaction(async () => { const key = prefix + 'metrics', data = JSON.parse((await AsyncStorage.getItem(key)) || '{}'); data[event] = (data[event] || 0) + value; await AsyncStorage.setItem(key, JSON.stringify(data)); });
 }
 
-export async function saveCompletedRun(score: number, distance: number, coins: number, completed: boolean) {
+export async function saveCompletedRun(score: number, distance: number, coins: number, completed: boolean, countRun = true) {
   const p = await loadMissions();
-  if (completed) { p.runs++; p.distance = Math.max(p.distance, Math.floor(distance)); p.coins += coins; }
+  if (completed) { if(countRun)p.runs++; p.distance = Math.max(p.distance, Math.floor(distance)); p.coins += coins; }
   const best = Math.max(Number(await AsyncStorage.getItem('neon-dash.high-score.v1')) || 0, score);
   const wallet = (Number(await AsyncStorage.getItem('neon-dash.wallet-coins.v1')) || 0) + coins;
   await AsyncStorage.multiSet([['neon-dash.high-score.v1', String(best)], ['neon-dash.wallet-coins.v1', String(wallet)], [prefix + 'missions', JSON.stringify(p)]]);

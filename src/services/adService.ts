@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import mobileAds, { AdsConsent, AdEventType, InterstitialAd, RewardedAd, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
+import mobileAds, { AdsConsent, AdEventType, InterstitialAd, RewardedAd, RewardedAdEventType } from 'react-native-google-mobile-ads';
 import { trackEvent } from './socialService';
 import { isInterstitialDue } from './adPolicy';
-export const TEST_ADS = !process.env.EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID;
+import { AD_UNITS } from '../constants/adUnits';
+export { TEST_ADS } from '../constants/adUnits';
 let initialized: Promise<boolean> | null = null, showing = false;
 export async function initializeAds(): Promise<boolean> {
  if (!initialized) initialized = (async () => {
@@ -24,7 +25,7 @@ export async function showInterstitialIfDue(): Promise<boolean> {
  const now = Date.now();
  if (!isInterstitialDue(completedRuns, lastShownRun, lastShownAt, now)) return false;
   if (!await initializeAds()) return false;
-  const ad = InterstitialAd.createForAdRequest(process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_UNIT_ID || TestIds.INTERSTITIAL);
+  const ad = InterstitialAd.createForAdRequest(AD_UNITS.interstitial);
   return await new Promise<boolean>(resolve => {
    let finished = false, loaded = false;
    const listeners: (() => void)[] = [];
@@ -53,11 +54,15 @@ export async function showInterstitialIfDue(): Promise<boolean> {
  } finally { showing = false; }
 }
 // Only a real EARNED_REWARD event grants coins. A load failure or dismissal grants nothing.
+export async function showRewardedReceipt(): Promise<string | null> {
+ const earned = await showCoinReward();
+ return earned ? `earned-${Date.now()}-${Math.random().toString(36).slice(2)}` : null;
+}
 export async function showCoinReward(): Promise<boolean> {
  if (showing) return false; showing = true;
  try {
   if (!await initializeAds()) return false;
-  const ad = RewardedAd.createForAdRequest(process.env.EXPO_PUBLIC_ADMOB_REWARDED_UNIT_ID || TestIds.REWARDED);
+  const ad = RewardedAd.createForAdRequest(AD_UNITS.rewarded);
   return await new Promise<boolean>(resolve => {
    let earned = false, finished = false;
    const listeners: (() => void)[] = [];

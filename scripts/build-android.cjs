@@ -19,7 +19,8 @@ if (process.argv[2] === 'run') {
   process.exit(result.status ?? 1);
 }
 const task = process.argv[2] === 'aab' ? ':app:bundleRelease' : ':app:assembleRelease';
-const abis = env.NEON_ANDROID_ABIS || 'armeabi-v7a,arm64-v8a';
+// Keep emulator/Intel support in the default test APK as well as phone ABIs.
+const abis = env.NEON_ANDROID_ABIS || 'armeabi-v7a,arm64-v8a,x86_64';
 const args = [task, '--console=plain', '--max-workers=2', '-PreactNativeArchitectures=' + abis];
 const result = windows
   ? spawnSync('cmd.exe', ['/d', '/c', 'gradlew.bat', ...args], { cwd: path.join(root, 'android'), env, stdio: 'inherit' })

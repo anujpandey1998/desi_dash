@@ -10,11 +10,17 @@ if (eocd < 0) throw Error('Invalid APK ZIP');
 let offset = zip.readUInt32LE(eocd + 16);
 const count = zip.readUInt16LE(eocd + 10);
 let nativeCount = 0, hasBundle = false;
+const nativeByAbi = new Map();
 for (let i = 0; i < count; i++) {
   if (zip.readUInt32LE(offset) !== 0x02014b50) throw Error('Invalid central directory');
   const length = zip.readUInt16LE(offset + 28);
   const name = zip.toString('utf8', offset + 46, offset + 46 + length);
   if (name === 'assets/index.android.bundle') hasBundle = true;
+  const nativeEntry = /^lib\/([^/]+)\/([^/]+\.so)$/.exec(name);
+  if (nativeEntry) {
+    if (!nativeByAbi.has(nativeEntry[1])) nativeByAbi.set(nativeEntry[1], new Set());
+    nativeByAbi.get(nativeEntry[1]).add(nativeEntry[2]);
+  }
   if (/^lib\/(arm64-v8a|x86_64)\/.*\.so$/.test(name)) {
     const local = zip.readUInt32LE(offset + 42);
     const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
@@ -35,6 +41,12 @@ for (let i = 0; i < count; i++) {
   offset += 46 + length + zip.readUInt16LE(offset + 30) + zip.readUInt16LE(offset + 32);
 }
 if (!hasBundle || !nativeCount) throw Error('APK must contain its JS bundle and native libraries');
+for (const [abi, libraries] of nativeByAbi) {
+  for (const required of ['libreactnative.so', 'libhermesvm.so', 'libappmodules.so', 'libexpo-gl.so', 'libc++_shared.so']) {
+    if (!libraries.has(required)) throw Error(`Incomplete native runtime for ${abi}: missing ${required}`);
+  }
+}
+if (process.argv.includes('--universal') && !['armeabi-v7a','arm64-v8a','x86_64'].every(abi => nativeByAbi.has(abi))) throw Error('Universal test APK is missing a supported phone/emulator ABI');
 const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
 if (!sdk) throw Error('Set ANDROID_HOME to verify APK ZIP alignment');
 const tools = path.join(sdk, 'build-tools', '37.0.0');

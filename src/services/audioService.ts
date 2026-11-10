@@ -16,11 +16,18 @@ export async function setVibrationEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(VIBRATION_KEY, String(enabled));
 }
 let music: AudioPlayer | null = null;
+let musicInit: Promise<void> | null = null;
+let musicRequested = false;
 const effectSources = {
   button: require('../assets/audio/button-click.wav'),
   jump: require('../assets/audio/jump.wav'),
   coin: require('../assets/audio/coin.wav'),
   crash: require('../assets/audio/crash.wav'),
+  drone: require('../assets/audio/drone.wav'),
+  footstep: require('../assets/audio/footstep.wav'),
+  chaser: require('../assets/audio/chaser-shout.wav'),
+  bird: require('../assets/audio/bird-caw.wav'),
+  buzz: require('../assets/audio/drone-buzz.wav'),
 };
 type EffectName = keyof typeof effectSources;
 const effectPlayers: Partial<Record<EffectName, AudioPlayer>> = {};
@@ -38,6 +45,7 @@ export async function saveSoundSetting(enabled: boolean): Promise<void> {
   soundEnabled = enabled;
   await AsyncStorage.setItem(SOUND_KEY, String(enabled));
   if (!enabled) {
+    await setDroneBuzz(false);
     await stopMusic();
   } else {
     await startMusic();
@@ -60,29 +68,33 @@ async function ensureAudioMode(): Promise<void> {
 
 async function ensureMusic() {
   if (music || !soundEnabled) return;
-  await ensureAudioMode();
-  music = createAudioPlayer(require('../assets/audio/bg-loop.wav'));
-  music.loop = true;
-  music.volume = 0.4;
-  music.play();
+  if (!musicInit) musicInit = (async () => {
+    await ensureAudioMode();
+    if (!soundEnabled || !musicRequested) return;
+    music = createAudioPlayer(require('../assets/audio/rooftop-user-theme.mp3'));
+    music.loop = true;
+    music.volume = 0.3;
+  })().finally(() => { musicInit = null; });
+  await musicInit;
 }
 
 export async function startMusic(): Promise<void> {
   if (!soundEnabled) return;
-  if (music) {
-    music.play();
-    return;
-  }
+  musicRequested = true;
   await ensureMusic();
+  if (musicRequested && soundEnabled) music?.play();
 }
 
 export async function stopMusic(): Promise<void> {
+  musicRequested = false;
   if (!music) return;
   music.pause();
   await music.seekTo(0);
 }
 
 export async function pauseMusic(): Promise<void> {
+  await setDroneBuzz(false);
+  musicRequested = false;
   if (!music) return;
   music.pause();
 }
@@ -106,6 +118,18 @@ export function playButtonTap(): Promise<void> {
 
 export function playJump(): Promise<void> {
   return playEffect('jump');
+}
+export function playDrone(): Promise<void> { return playEffect('drone'); }
+export function playFootstep(): Promise<void> { return playEffect('footstep'); }
+export function playChaserShout(): Promise<void> { return playEffect('chaser'); }
+export function playBirdCaw(): Promise<void> { return playEffect('bird'); }
+let buzzRequested=false;
+export async function setDroneBuzz(active:boolean):Promise<void>{
+  buzzRequested=active&&soundEnabled;
+  if(!buzzRequested){effectPlayers.buzz?.pause();return;}
+  await ensureAudioMode();if(!buzzRequested||!soundEnabled)return;
+  const player=effectPlayers.buzz??(effectPlayers.buzz=createAudioPlayer(effectSources.buzz));
+  player.loop=true;player.volume=.3;player.play();
 }
 
 export function playCoin(): Promise<void> {

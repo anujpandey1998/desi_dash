@@ -22,3 +22,10 @@
 
 # WorkManager Room database is instantiated through reflection during startup.
 -keep class androidx.work.impl.WorkDatabase_Impl { public <init>(); }
+
+# Remove native verbose/debug/info logs from optimized release builds.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

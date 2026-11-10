@@ -18,3 +18,16 @@ android/.kotlin/
 
 tools/cloudflared.exe
 tools/cloudflared
+
+# Firebase / release credentials
+android/app/google-services.json
+**/GoogleService-Info.plist
+*.keystore
+*.jks
+!android/app/debug.keystore
+android/signing.properties
+functions/node_modules/
+functions/lib/
+.firebase/
+firebase-debug.log
+firestore-debug.log

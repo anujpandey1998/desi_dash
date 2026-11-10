@@ -1,7 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localTransaction } from '../services/socialService';
+export type CharacterId='boy'|'girl';
+export const CHARACTERS=[{id:'boy' as const,name:'Boy courier'},{id:'girl' as const,name:'Girl courier'}];
+const CHARACTER_KEY='rooftop.character.v1';
+export async function loadCharacter():Promise<CharacterId>{return await AsyncStorage.getItem(CHARACTER_KEY)==='girl'?'girl':'boy';}
+export async function saveCharacter(id:CharacterId):Promise<void>{if(id!=='boy'&&id!=='girl')throw Error('Unknown character');await AsyncStorage.setItem(CHARACTER_KEY,id);}
+const COURIER_NAME_KEY='rooftop.courier-name.v1';
+export function normalizeCourierName(value:string):string {
+  return Array.from(value.replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').replace(/\s+/g,' ').trim()).slice(0,20).join('');
+}
+export async function loadCourierName():Promise<string>{return normalizeCourierName(await AsyncStorage.getItem(COURIER_NAME_KEY)||'')||'Courier';}
+export async function saveCourierName(value:string):Promise<string>{
+  const name=normalizeCourierName(value);if(!name)throw Error('Please enter a name for your courier.');
+  await AsyncStorage.setItem(COURIER_NAME_KEY,name);return name;
+}
 export const OUTFITS = [
-  { name: 'Sunset', color: '#ef6c35' },
+  { name: 'Rush Blue', color: '#176BFA' },
   { name: 'Ocean', color: '#2ba6a0' },
   { name: 'Night', color: '#6963ba' },
   { name: 'Marigold', color: '#e8ae35' },
